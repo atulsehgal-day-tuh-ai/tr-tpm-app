@@ -1,0 +1,16 @@
+node_modules
+.next
+coverage
+.git
+.vercel
+.cursor
+
+*.log
+*.pem
+
+.env
+.env.*.local
+.env.local
+
+reference_docs
+

@@ -1,0 +1,103 @@
+name: Build + Deploy (Dev → Stage → Prod)
+
+on:
+  push:
+    branches:
+      - main
+      - release
+      - prod
+
+concurrency:
+  group: tr-tpm-app-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+
+    # Map branch → environment
+    environment: ${{ github.ref_name == 'main' && 'dev' || github.ref_name == 'release' && 'stage' || 'prod' }}
+
+    env:
+      # Expected to be defined per-environment (GitHub Environments → Secrets/Variables)
+      ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+      AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
+
+      # Optional: override repo name in ACR via env variable; defaults to repo name
+      IMAGE_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (Service Principal)
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Validate required settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "${ACR_LOGIN_SERVER:-}" ]] || missing+=("ACR_LOGIN_SERVER")
+          [[ -n "${ACR_NAME:-}" ]] || missing+=("ACR_NAME")
+          [[ -n "${AZURE_RESOURCE_GROUP:-}" ]] || missing+=("AZURE_RESOURCE_GROUP")
+          [[ -n "${AZURE_WEBAPP_NAME:-}" ]] || missing+=("AZURE_WEBAPP_NAME")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "Missing required secrets/vars for this environment: ${missing[*]}"
+            echo "Set them in GitHub → Settings → Environments → (dev|stage|prod)."
+            exit 1
+          fi
+          if [[ -z "${IMAGE_REPOSITORY:-}" ]]; then
+            IMAGE_REPOSITORY="${GITHUB_REPOSITORY##*/}"
+          fi
+          echo "IMAGE_REPOSITORY=$IMAGE_REPOSITORY" >> "$GITHUB_ENV"
+
+      - name: ACR login
+        shell: bash
+        run: |
+          set -euo pipefail
+          az acr login --name "$ACR_NAME"
+
+      - name: Build + push image
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV_TAG="${{ github.ref_name == 'main' && 'dev' || github.ref_name == 'release' && 'stage' || 'prod' }}"
+          IMAGE_SHA_TAG="${ACR_LOGIN_SERVER}/${IMAGE_REPOSITORY}:${GITHUB_SHA}"
+          IMAGE_ENV_TAG="${ACR_LOGIN_SERVER}/${IMAGE_REPOSITORY}:${ENV_TAG}"
+
+          echo "Building: $IMAGE_SHA_TAG"
+          docker build -t "$IMAGE_SHA_TAG" -t "$IMAGE_ENV_TAG" .
+          docker push "$IMAGE_SHA_TAG"
+          docker push "$IMAGE_ENV_TAG"
+
+          echo "IMAGE_SHA_TAG=$IMAGE_SHA_TAG" >> "$GITHUB_ENV"
+
+      - name: Configure App Service container (pin to SHA) + restart
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Ensure required container flags are set (safe to re-apply)
+          az webapp config appsettings set \
+            -g "$AZURE_RESOURCE_GROUP" \
+            -n "$AZURE_WEBAPP_NAME" \
+            --settings \
+              WEBSITES_PORT=3000 \
+              WEBSITES_ENABLE_APP_SERVICE_STORAGE=false
+
+          az webapp config container set \
+            -g "$AZURE_RESOURCE_GROUP" \
+            -n "$AZURE_WEBAPP_NAME" \
+            --docker-custom-image-name "$IMAGE_SHA_TAG" \
+            --docker-registry-server-url "https://${ACR_LOGIN_SERVER}"
+
+          az webapp restart -g "$AZURE_RESOURCE_GROUP" -n "$AZURE_WEBAPP_NAME"
+
