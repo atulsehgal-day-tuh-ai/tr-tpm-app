@@ -396,6 +396,9 @@ Verify:
 - **PowerShell parsing issues**
   - **Symptom**: runtime strings like `NODE|20-lts` behave like a pipe; multi-line bash commands fail
   - **Fix**: use PowerShell backtick for line continuation and avoid `|` strings (or escape). Creating container apps with a placeholder image is simplest.
+- **PR Checks failing at `next lint`**
+  - **Symptom**: CI shows an interactive prompt like “How would you like to configure ESLint?” and exits with code 1
+  - **Fix**: ensure ESLint is configured in-repo. This repo includes `.eslintrc.json` (extends `next/core-web-vitals`) to keep `npm run lint` non-interactive in GitHub Actions.
 - **Site “loads forever” in browser**
   - **Common cause**: the Web App is still running the placeholder image (`mcr.microsoft.com/...helloworld`)
   - **Fix**: ensure GitHub Actions ran successfully and updated container settings to your ACR image/tag; check App Service → **Deployment Center → Containers**
