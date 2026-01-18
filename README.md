@@ -102,307 +102,312 @@ Then open `http://localhost:3000`.
 
 ## Deploy: Azure App Service (Linux Container)
 
-### IT-friendly runbook (GitHub Actions → ACR → App Service)
+### Overview (GitHub Actions → ACR → App Service)
 
-This is the clean “enterprise” path when you **cannot (or don’t want to) run Docker locally**.
+This repo deploys a **containerized Next.js app** to **Azure App Service (Linux Container)** using:
 
-#### Executive summary (non-technical)
+- **GitHub Actions**: builds + pushes the Docker image
+- **ACR (Azure Container Registry)**: stores images privately
+- **App Service**: runs the image by pulling from ACR
+- **Managed Identity + AcrPull**: App Service pulls from ACR **without passwords**
 
-We deploy this Node.js/Next.js application as a **container image** (a packaged, self-contained “app box” that includes the code and everything it needs to run). Instead of building that container on a developer laptop, we use **GitHub Actions** as a controlled build system that creates the container image every time we push changes to the `main` branch.
+Why this approach:
 
-The container image is stored in **Azure Container Registry (ACR)**, which is Azure’s private storage for container images. **Azure App Service** then runs the app by pulling the latest approved image from ACR. To keep this secure, App Service uses a **Managed Identity** with the minimum required permission (**AcrPull**) so it can pull images from ACR **without any registry passwords**.
+- **Build once, promote upward**: the exact same image tag (commit SHA) runs in Dev → Stage → Prod
+- **No “works on my machine”**: builds happen in CI
+- **Secrets stay out of git**: DB URL + Entra IDs live in App Service config
 
-Overall: **GitHub Actions builds → ACR stores → App Service runs**, and configuration (database URL, Azure AD IDs) is provided via **App Settings** in Azure rather than hard-coded in the application.
+### Prerequisites
 
-#### What we are building (concepts)
+- An Azure subscription (billing enabled)
+- Azure CLI (`az`) installed + logged in
+- A GitHub repo for this code
+- App Service and Postgres naming decided for Dev/Stage/Prod
 
-- **GitHub Actions**: a build server that runs in GitHub. It will build the container image for you on every push.
-- **ACR (Azure Container Registry)**: a private Docker image registry in Azure (like a private Docker Hub).
-- **Azure App Service (Linux Container)**: the web hosting service. It *pulls* the image from ACR and runs it.
-- **Managed Identity + AcrPull**: a secure way for App Service to pull from ACR **without storing registry passwords**.
+### Deployment runbook (PowerShell, new subscription, Dev/Stage/Prod)
 
-#### Prerequisites
+This runbook reflects the exact approach we used during setup:
 
-- You have an Azure subscription (billing enabled).
-- Azure CLI installed (`az version` works) or use Azure Cloud Shell.
-- You have a GitHub repo for this code and can add GitHub Secrets.
+- **4 resource groups**: `shared` (ACR), plus `dev`, `stage`, `prod`
+- **1 shared ACR**: images stored centrally
+- **3 App Service plans**: isolate compute per environment
+- **3 Web Apps**: isolate runtime per environment
+- **3 Postgres servers**: isolate data per environment
+- **3 Entra app registrations**: isolate auth config per environment
+- **3 CI service principals**: least-privilege GitHub Actions credentials per environment
 
----
+#### Step 0) Choose values (example)
 
-### Step A1) Create (or pick) a Resource Group
+- **Region**: `westus2`
+- **Resource groups**:
+  - Shared: `tr-tpm-shared-rg`
+  - Dev: `tr-tpm-dev-rg`
+  - Stage: `tr-tpm-stage-rg`
+  - Prod: `tr-tpm-prod-rg`
+- **ACR (shared)**: `trtpmacrdaytuhai01` (`trtpmacrdaytuhai01.azurecr.io`)
+- **Web apps**: `tr-tpm-app-dev`, `tr-tpm-app-stage`, `tr-tpm-app-prod`
+- **Postgres servers**: `db-pg-tr-tpm-dev`, `db-pg-tr-tpm-stage`, `db-pg-tr-tpm-prod`
+- **Databases**: `tr_tpm_dev`, `tr_tpm_stage`, `tr_tpm_prod`
 
-Purpose: a Resource Group is a container for related Azure resources (ACR, App Service, etc.).
+#### Step 1) Select the subscription (NEW subscription)
 
-```bash
-az group create -n tr-tpm-rg -l westus2
+Purpose: everything you create after this is billed/governed under this subscription.
+
+```powershell
+az login
+az account list -o table
+az account set --subscription "<NEW_SUBSCRIPTION_ID_OR_NAME>"
+az account show -o table
 ```
 
-If it already exists, you can check its region:
+#### Step 2) Register required Azure providers (critical in new subscriptions)
 
-```bash
-az group show -n tr-tpm-rg --query location -o tsv
+Purpose: brand-new subscriptions often are not registered for ACR/AppService/Postgres yet.
+
+If you skip this, you’ll see errors like:
+- `MissingSubscriptionRegistration` for `Microsoft.ContainerRegistry`
+- `MissingSubscriptionRegistration` for `Microsoft.DBforPostgreSQL`
+
+```powershell
+az provider register --namespace Microsoft.ContainerRegistry
+az provider register --namespace Microsoft.Web
+az provider register --namespace Microsoft.DBforPostgreSQL
+
+while ((az provider show --namespace Microsoft.ContainerRegistry --query registrationState -o tsv) -ne "Registered") { Start-Sleep 10 }
+while ((az provider show --namespace Microsoft.Web              --query registrationState -o tsv) -ne "Registered") { Start-Sleep 10 }
+while ((az provider show --namespace Microsoft.DBforPostgreSQL  --query registrationState -o tsv) -ne "Registered") { Start-Sleep 10 }
 ```
 
----
+#### Step 3) Create resource groups (shared + dev + stage + prod)
 
-### Step A2) Create an Azure Container Registry (ACR)
+Purpose: isolate resources and access control per environment.
 
-Purpose: store your Docker images privately so App Service can run them.
+```powershell
+$LOCATION = "westus2"
+$RG_SHARED = "tr-tpm-shared-rg"
+$RG_DEV    = "tr-tpm-dev-rg"
+$RG_STAGE  = "tr-tpm-stage-rg"
+$RG_PROD   = "tr-tpm-prod-rg"
 
-```bash
-az acr create -g tr-tpm-rg -n trtpmacr12345 --sku Basic
-az acr show -g tr-tpm-rg -n trtpmacr12345 --query loginServer -o tsv
+az group create -n $RG_SHARED -l $LOCATION
+az group create -n $RG_DEV    -l $LOCATION
+az group create -n $RG_STAGE  -l $LOCATION
+az group create -n $RG_PROD   -l $LOCATION
 ```
 
-You should get a login server like: `trtpmacr12345.azurecr.io`.
+#### Step 4) Create the shared ACR
 
----
+Purpose: store images in one place; all web apps pull from it. (Shared ACR is common and not inherently a problem.)
 
-### Step A3) Create an Azure Service Principal for GitHub Actions
+```powershell
+$ACR_NAME = "trtpmacrdaytuhai01"
 
-Purpose: GitHub Actions needs a “machine identity” it can use to log in to Azure and push images to ACR.
+az acr check-name -n $ACR_NAME -o table
+az acr create -g $RG_SHARED -n $ACR_NAME --sku Basic
 
-```bash
-ACR_ID=$(az acr show -n trtpmacr12345 -g tr-tpm-rg --query id -o tsv)
-
-az ad sp create-for-rbac \
-  --name "tr-tpm-gh-actions" \
-  --role contributor \
-  --scopes "$ACR_ID" \
-  --sdk-auth
+$ACR_LOGIN_SERVER = az acr show -g $RG_SHARED -n $ACR_NAME --query loginServer -o tsv
+$ACR_ID           = az acr show -g $RG_SHARED -n $ACR_NAME --query id -o tsv
 ```
 
-This prints a JSON blob. **Copy it.**
+#### Step 5) Create 3 CI service principals (least privilege)
 
----
+Purpose: GitHub Actions needs Azure credentials to push images and update each environment. For a real app, use one service principal **per environment**.
 
-### Step A4) Add GitHub Secrets
+Each command prints a JSON blob—copy it and store it as GitHub Environment secret `AZURE_CREDENTIALS` for that environment.
 
-Purpose: store credentials securely so they are not committed to git.
+```powershell
+$SHARED_RG_ID = az group show -n $RG_SHARED --query id -o tsv
+$DEV_RG_ID    = az group show -n $RG_DEV    --query id -o tsv
+$STAGE_RG_ID  = az group show -n $RG_STAGE  --query id -o tsv
+$PROD_RG_ID   = az group show -n $RG_PROD   --query id -o tsv
 
-In GitHub repo → **Settings → Secrets and variables → Actions**:
-
-- **Secret: `AZURE_CREDENTIALS`** = paste the JSON from Step A3
-- **Secret: `ACR_LOGIN_SERVER`** = `trtpmacr12345.azurecr.io`
-
----
-
-### Step A5) Add the GitHub Actions workflow
-
-Purpose: automatically build and push a Docker image to ACR on every push to `main`.
-
-File path:
-
-```text
-.github/workflows/acr-build-push.yml
+az ad sp create-for-rbac --name "tr-tpm-gh-actions-dev"   --role contributor --scopes $SHARED_RG_ID $DEV_RG_ID   --sdk-auth
+az ad sp create-for-rbac --name "tr-tpm-gh-actions-stage" --role contributor --scopes $SHARED_RG_ID $STAGE_RG_ID --sdk-auth
+az ad sp create-for-rbac --name "tr-tpm-gh-actions-prod"  --role contributor --scopes $SHARED_RG_ID $PROD_RG_ID  --sdk-auth
 ```
 
-Once committed to `main`, go to GitHub → **Actions** and confirm the workflow run is green.
+#### Step 6) Create App Service plans (separate per environment)
 
----
+Purpose: compute isolation; dev load can’t slow prod.
 
-### Step A6) Create the App Service Plan (Linux)
+```powershell
+$PLAN_DEV   = "tr-tpm-plan-dev"
+$PLAN_STAGE = "tr-tpm-plan-stage"
+$PLAN_PROD  = "tr-tpm-plan-prod"
 
-Purpose: the compute “plan” the web app runs on.
-
-```bash
-az appservice plan create -g tr-tpm-rg -n tr-tpm-plan --is-linux --sku B1 -l westus2
+az appservice plan create -g $RG_DEV   -n $PLAN_DEV   --is-linux --sku B1   -l $LOCATION
+az appservice plan create -g $RG_STAGE -n $PLAN_STAGE --is-linux --sku B1   -l $LOCATION
+az appservice plan create -g $RG_PROD  -n $PLAN_PROD  --is-linux --sku P1v3 -l $LOCATION
 ```
 
----
+#### Step 7) Create Web Apps (as container apps)
 
-### Step A7) Create the Web App (Linux Container)
+Purpose: create the app endpoints first, then let CI wire them to your ACR image.
 
-Purpose: the actual website endpoint that will run your container.
+Why we use a placeholder image here:
 
-```bash
-az webapp create \
-  -g tr-tpm-rg \
-  -p tr-tpm-plan \
-  -n tr-tpm-test-app-v1
+- Some `az webapp create` variants require `--runtime` for Linux plans, and in PowerShell the `|` in strings like `NODE|20-lts` can be parsed as a pipe if not escaped.
+- Creating a web app as a **container** app avoids that runtime-string issue.
+
+```powershell
+$APP_DEV   = "tr-tpm-app-dev"
+$APP_STAGE = "tr-tpm-app-stage"
+$APP_PROD  = "tr-tpm-app-prod"
+
+az webapp create -g $RG_DEV   -p $PLAN_DEV   -n $APP_DEV   --deployment-container-image-name mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
+az webapp create -g $RG_STAGE -p $PLAN_STAGE -n $APP_STAGE --deployment-container-image-name mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
+az webapp create -g $RG_PROD  -p $PLAN_PROD  -n $APP_PROD  --deployment-container-image-name mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
 ```
 
-Note: You may see warnings about deprecated flags; those are okay for now.
+Note: `--deployment-container-image-name` is deprecated but still works; CI will overwrite the container config later.
 
----
+#### Step 8) Allow each Web App to pull from ACR (Managed Identity)
 
-### Step A8) Allow the Web App to pull from ACR (Managed Identity)
+Purpose: eliminate registry passwords; use Managed Identity + `AcrPull`.
 
-Purpose: App Service must be able to pull your image from ACR. We do this securely using Managed Identity.
+```powershell
+az webapp identity assign -g $RG_DEV   -n $APP_DEV
+az webapp identity assign -g $RG_STAGE -n $APP_STAGE
+az webapp identity assign -g $RG_PROD  -n $APP_PROD
 
-```bash
-# Enable system-assigned identity on the web app
-az webapp identity assign -g tr-tpm-rg -n tr-tpm-test-app-v1
+$DEV_PID   = az webapp identity show -g $RG_DEV   -n $APP_DEV   --query principalId -o tsv
+$STAGE_PID = az webapp identity show -g $RG_STAGE -n $APP_STAGE --query principalId -o tsv
+$PROD_PID  = az webapp identity show -g $RG_PROD  -n $APP_PROD  --query principalId -o tsv
 
-# Grant AcrPull to the web app identity on the ACR
-PRINCIPAL_ID=$(az webapp identity show -g tr-tpm-rg -n tr-tpm-test-app-v1 --query principalId -o tsv)
-ACR_ID=$(az acr show -n trtpmacr12345 -g tr-tpm-rg --query id -o tsv)
-az role assignment create --assignee-object-id "$PRINCIPAL_ID" --assignee-principal-type ServicePrincipal --role AcrPull --scope "$ACR_ID"
+az role assignment create --assignee-object-id $DEV_PID   --assignee-principal-type ServicePrincipal --role AcrPull --scope $ACR_ID
+az role assignment create --assignee-object-id $STAGE_PID --assignee-principal-type ServicePrincipal --role AcrPull --scope $ACR_ID
+az role assignment create --assignee-object-id $PROD_PID  --assignee-principal-type ServicePrincipal --role AcrPull --scope $ACR_ID
 
-# Tell the web app to use Managed Identity creds when pulling from ACR
-SUB_ID=$(az account show --query id -o tsv)
-az resource update --ids "/subscriptions/$SUB_ID/resourceGroups/tr-tpm-rg/providers/Microsoft.Web/sites/tr-tpm-test-app-v1/config/web" --set properties.acrUseManagedIdentityCreds=true
+$SUB_ID = az account show --query id -o tsv
+az resource update --ids "/subscriptions/$SUB_ID/resourceGroups/$RG_DEV/providers/Microsoft.Web/sites/$APP_DEV/config/web"     --set properties.acrUseManagedIdentityCreds=true
+az resource update --ids "/subscriptions/$SUB_ID/resourceGroups/$RG_STAGE/providers/Microsoft.Web/sites/$APP_STAGE/config/web" --set properties.acrUseManagedIdentityCreds=true
+az resource update --ids "/subscriptions/$SUB_ID/resourceGroups/$RG_PROD/providers/Microsoft.Web/sites/$APP_PROD/config/web"   --set properties.acrUseManagedIdentityCreds=true
 ```
 
----
+#### Step 9) Create Postgres (Flexible Server) per environment
 
-### Step A9) Point the Web App to your image in ACR
-
-Purpose: configure which container image App Service should run.
-
-```bash
-az webapp config container set \
-  -g tr-tpm-rg \
-  -n tr-tpm-test-app-v1 \
-  --docker-custom-image-name trtpmacr12345.azurecr.io/tr-tpm-test-app:latest \
-  --docker-registry-server-url https://trtpmacr12345.azurecr.io
-```
-
-Also set required container settings:
-
-```bash
-az webapp config appsettings set -g tr-tpm-rg -n tr-tpm-test-app-v1 --settings \
-  WEBSITES_PORT=3000 \
-  WEBSITES_ENABLE_APP_SERVICE_STORAGE=false
-```
-
----
-
-### Step A10) Set the app environment variables (runtime configuration)
-
-Purpose: provide DB and Azure AD settings securely at runtime (not in source code).
-
-```bash
-az webapp config appsettings set -g tr-tpm-rg -n tr-tpm-test-app-v1 --settings \
-  DATABASE_URL="<YOUR_DATABASE_URL>" \
-  NEXT_PUBLIC_AZURE_AD_CLIENT_ID="<CLIENT_ID>" \
-  NEXT_PUBLIC_AZURE_AD_TENANT_ID="<TENANT_ID>" \
-  NEXT_PUBLIC_AZURE_AD_REDIRECT_URI="https://tr-tpm-test-app-v1.azurewebsites.net"
-```
-
-#### Azure AD (Entra ID) login: important notes
-
-Purpose: make sure users can sign in successfully using the correct Entra App Registration.
-
-- Use the **App Registration for the web app** (example display name: `TR TPM Test App`) for:
-  - `NEXT_PUBLIC_AZURE_AD_CLIENT_ID`
-  - `NEXT_PUBLIC_AZURE_AD_TENANT_ID`
-- Do **NOT** use the GitHub Actions service principal app (example display name: `tr-tpm-gh-actions`). That identity is only for CI/CD to push images.
-
-Entra App Registration configuration (Azure Portal → Microsoft Entra ID → App registrations → your app → **Authentication**):
-
-- Add a **Single-page application (SPA)** Redirect URI:
-  - `https://tr-tpm-test-app-v1.azurewebsites.net`
-- (Optional) for local testing add:
-  - `http://localhost:3000`
-
-Runtime verification endpoints (safe):
-
-- Check the app sees your env vars:
-  - `https://tr-tpm-test-app-v1.azurewebsites.net/api/public-config`
-
----
-
-#### Database: Azure Database for PostgreSQL (Flexible Server) setup (basic testing)
-
-Purpose: create a Postgres database in Azure and allow the web app to connect.
-
-1) Create / open your server: Azure Database for PostgreSQL Flexible Server (example: `db-tr-tpm-test`).
-
-2) Networking (quick test):
-   - PostgreSQL server → **Networking**
-   - Enable **Public access**
-   - Check **Allow public access from any Azure service within Azure to this server**
-   - Save
-
-3) Authentication mode (important):
-   - PostgreSQL server → **Security → Authentication**
-   - Select **PostgreSQL authentication only**
-   - Click **Reset password** and set a password for the admin login (example: `tr_test_admin`)
-   - Save
-
-4) Set `DATABASE_URL` in the Web App:
-
-Example format:
-
-```text
-postgresql://tr_test_admin:<PASSWORD>@db-tr-tpm-test.postgres.database.azure.com:5432/postgres?sslmode=require
-```
+Purpose: data isolation per environment.
 
 Notes:
-- `sslmode=require` is recommended for Azure Postgres.
-- If your password contains special characters (like `@`), URL-encode them (example: `@` → `%40`).
 
-5) Restart the Web App after changing settings:
+- Provisioning can take **5–15+ minutes**; “InProgress” for several minutes is normal.
+- You cannot retrieve the existing password later; if you don’t know it you must **reset** it.
+- The server admin username cannot be changed after creation; only the password can be reset.
 
-```bash
-az webapp restart -g tr-tpm-rg -n tr-tpm-test-app-v1
+```powershell
+$PG_DEV   = "db-pg-tr-tpm-dev"
+$PG_STAGE = "db-pg-tr-tpm-stage"
+$PG_PROD  = "db-pg-tr-tpm-prod"
+
+az postgres flexible-server create -g $RG_DEV   -n $PG_DEV   -l $LOCATION --version 16 --tier Burstable      --sku-name Standard_B1ms  --storage-size 32  --public-access 0.0.0.0-255.255.255.255
+az postgres flexible-server create -g $RG_STAGE -n $PG_STAGE -l $LOCATION --version 16 --tier Burstable      --sku-name Standard_B1ms  --storage-size 32  --public-access 0.0.0.0-255.255.255.255
+az postgres flexible-server create -g $RG_PROD  -n $PG_PROD  -l $LOCATION --version 16 --tier GeneralPurpose --sku-name Standard_D2s_v3 --storage-size 128 --public-access 0.0.0.0-255.255.255.255
+
+az postgres flexible-server db create -g $RG_DEV   -s $PG_DEV   -d tr_tpm_dev
+az postgres flexible-server db create -g $RG_STAGE -s $PG_STAGE -d tr_tpm_stage
+az postgres flexible-server db create -g $RG_PROD  -s $PG_PROD  -d tr_tpm_prod
 ```
 
-6) Verify database connectivity:
-   - `https://tr-tpm-test-app-v1.azurewebsites.net/api/test-db`
+#### Step 10) Entra ID (Azure AD) app registrations (per environment)
 
-If it fails, the API returns a `details` block (error code/message) to help IT troubleshoot (for example wrong password, firewall, SSL).
+Purpose: browser authentication via MSAL (this app uses `@azure/msal-react` → SPA auth).
 
----
+For each environment (`dev`, `stage`, `prod`):
 
-#### Forcing App Service to pull the newest container image
+- Create an App Registration
+  - **Account type**: typically **Multitenant** if Talking Rain is in another tenant
+- Authentication
+  - Add **Single-page application (SPA)** redirect URI:
+    - Dev: `https://tr-tpm-app-dev.azurewebsites.net`
+    - Stage: `https://tr-tpm-app-stage.azurewebsites.net`
+    - Prod: `https://tr-tpm-app-prod.azurewebsites.net`
+  - Leave **Implicit grant** unchecked (Access tokens, ID tokens)
+  - Leave **Allow public client flows** disabled
+- API permissions
+  - Microsoft Graph → Delegated → `User.Read`
 
-Purpose: sometimes `:latest` is cached; pinning to a specific image tag forces a new pull.
+Record for each environment:
 
-1) List tags in ACR:
+- `NEXT_PUBLIC_AZURE_AD_CLIENT_ID`
+- `NEXT_PUBLIC_AZURE_AD_TENANT_ID`
+- `NEXT_PUBLIC_AZURE_AD_REDIRECT_URI` (the env URL above)
 
-```bash
-az acr repository show-tags -n trtpmacr12345 --repository tr-tpm-test-app --orderby time_desc --top 10 -o table
+#### Step 11) Configure App Service environment variables (per environment)
+
+Purpose: provide runtime configuration (DB + Entra IDs) securely via App Service settings.
+
+Portal path:
+
+- App Service → your app (`tr-tpm-app-dev`) → **Settings → Environment variables** (or **Configuration**) → **Application settings**
+
+Set (per environment):
+
+- `DATABASE_URL` (different per env)
+- `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` (different per env)
+- `NEXT_PUBLIC_AZURE_AD_TENANT_ID`
+- `NEXT_PUBLIC_AZURE_AD_REDIRECT_URI` (env URL)
+- `WEBSITES_PORT=3000`
+- `WEBSITES_ENABLE_APP_SERVICE_STORAGE=false`
+
+Azure Postgres URL format:
+
+```text
+postgresql://USER:PASSWORD@SERVER.postgres.database.azure.com:5432/DB_NAME?sslmode=require
 ```
 
-2) Set the Web App to a specific tag (example tag is a git SHA):
+#### Step 12) GitHub Environments + secrets (dev/stage/prod)
 
-```bash
-az webapp config container set \
-  -g tr-tpm-rg \
-  -n tr-tpm-test-app-v1 \
-  --docker-custom-image-name trtpmacr12345.azurecr.io/tr-tpm-test-app:<TAG> \
-  --docker-registry-server-url https://trtpmacr12345.azurecr.io
-```
+Purpose: CI/CD credentials + targets per environment.
 
-Then restart the app.
+Create GitHub Environments:
 
----
+- `dev`
+- `stage` (recommended: approvals)
+- `prod` (recommended: approvals)
 
-### Step A11) Restart and verify
+In each environment, add **secrets**:
 
-```bash
-az webapp restart -g tr-tpm-rg -n tr-tpm-test-app-v1
-```
+- `AZURE_CREDENTIALS` (JSON from the matching service principal in Step 5)
+- `ACR_NAME` = `trtpmacrdaytuhai01`
+- `ACR_LOGIN_SERVER` = `trtpmacrdaytuhai01.azurecr.io`
+- `AZURE_RESOURCE_GROUP` = the env RG (`tr-tpm-dev-rg`, etc.)
+- `AZURE_WEBAPP_NAME` = the env web app (`tr-tpm-app-dev`, etc.)
 
-Open:
+#### Step 13) Deploy by promotion (Dev → Stage → Prod)
 
-- `https://tr-tpm-test-app-v1.azurewebsites.net`
+- Push/merge to `main` → deploys **dev**
+- Merge `main` → `release` → deploys **stage**
+- Merge `release` → `prod` → deploys **prod**
 
-Verification checklist:
+Verify:
 
-- App loads
-- Azure AD login works
-- “Test Database Connection” works
+- Home: `https://<app>.azurewebsites.net`
+- Runtime config: `https://<app>.azurewebsites.net/api/public-config`
+- DB test: `https://<app>.azurewebsites.net/api/test-db`
 
----
+### Troubleshooting (issues we hit during setup)
 
-### Common troubleshooting
+- **Azure provider not registered (new subscription)**
+  - **Symptom**: `MissingSubscriptionRegistration` for `Microsoft.ContainerRegistry` or `Microsoft.DBforPostgreSQL`
+  - **Fix**: run Step 2 provider registration and wait until `Registered`
+- **GitHub Actions Azure login fails**
+  - **Symptom**: `Login failed ... Ensure 'client-id' and 'tenant-id' are supplied`
+  - **Fix**: `AZURE_CREDENTIALS` is missing/invalid in GitHub Environment secrets
+- **PowerShell parsing issues**
+  - **Symptom**: runtime strings like `NODE|20-lts` behave like a pipe; multi-line bash commands fail
+  - **Fix**: use PowerShell backtick for line continuation and avoid `|` strings (or escape). Creating container apps with a placeholder image is simplest.
+- **Site “loads forever” in browser**
+  - **Common cause**: the Web App is still running the placeholder image (`mcr.microsoft.com/...helloworld`)
+  - **Fix**: ensure GitHub Actions ran successfully and updated container settings to your ACR image/tag; check App Service → **Deployment Center → Containers**
+- **Container doesn’t start / image pull errors**
+  - **Fix**: confirm `acrUseManagedIdentityCreds=true`, the web app identity has `AcrPull` on the ACR, and `WEBSITES_PORT=3000` is set
+  - **Where to look**: App Service → **Log stream**
+- **Postgres provisioning takes time**
+  - **Note**: 5–15+ minutes for create is normal; don’t interrupt immediately
+- **Forgot DB password**
+  - **Note**: you cannot view current password; you must reset it
+  - **Note**: you cannot change the admin username after server creation
 
-- **“No credential was provided to access Azure Container Registry”**
-  - This usually means the Web App is not configured to use Managed Identity to pull images, or the identity lacks `AcrPull`.
-  - Re-run Steps A8–A9.
-
-- **App starts but shows errors**
-  - Check App Service logs: Azure Portal → Web App → **Log stream**
-
-- **DB connection errors**
-  - Confirm `DATABASE_URL` is set in App Service configuration.
-  - Confirm Azure Postgres firewall/network allows the App Service outbound IPs (see Web App → Properties → outbound IPs).
-  - Ensure SSL is enabled (Azure Postgres requires it).
-
----
 
 ## Operating Model for the Real Application (Dev → Stage → Prod)
 
@@ -458,8 +463,8 @@ Create 3 GitHub Environments in your repo:
 In each Environment, set these **secrets**:
 
 - `AZURE_CREDENTIALS`: JSON output of `az ad sp create-for-rbac --sdk-auth` (service principal used by GitHub Actions)
-- `ACR_NAME`: ACR resource name (example: `trtpmacr12345`)
-- `ACR_LOGIN_SERVER`: ACR login server (example: `trtpmacr12345.azurecr.io`)
+- `ACR_NAME`: ACR resource name (example: `trtpmacrdaytuhai01`)
+- `ACR_LOGIN_SERVER`: ACR login server (example: `trtpmacrdaytuhai01.azurecr.io`)
 - `AZURE_RESOURCE_GROUP`: resource group name (example: `tr-tpm-rg`)
 - `AZURE_WEBAPP_NAME`: web app name for that environment (example: `tr-tpm-app-dev`, `tr-tpm-app-stage`, `tr-tpm-app-prod`)
 
