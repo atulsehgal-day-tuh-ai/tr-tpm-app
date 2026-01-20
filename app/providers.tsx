@@ -12,8 +12,8 @@ type PublicConfig = {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [error, setError] = useState<string>('')
+  const [status, setStatus] = useState<'loading' | 'ready' | 'disabled'>('loading')
+  const [message, setMessage] = useState<string>('')
   const [config, setConfig] = useState<PublicConfig | null>(null)
 
   useEffect(() => {
@@ -31,11 +31,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
         if (missing.length > 0) {
           if (!cancelled) {
-            setError(
-              `Azure AD is not configured. Missing: ${missing.join(', ')}. ` +
-                `Set these in your hosting environment (e.g., Azure App Service → Configuration → Application settings), then restart the app.`
+            setMessage(
+              `Azure AD auth is not configured (missing: ${missing.join(', ')}). ` +
+                `The app will run without login in this mode.`
             )
-            setStatus('error')
+            setStatus('disabled')
           }
           return
         }
@@ -46,8 +46,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }
       } catch (e: any) {
         if (!cancelled) {
-          setError(`Failed to load runtime config: ${e?.message || String(e)}`)
-          setStatus('error')
+          setMessage(`Azure AD config could not be loaded (${e?.message || String(e)}). Running without login.`)
+          setStatus('disabled')
         }
       }
     }
@@ -74,26 +74,26 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return instance
   }, [config])
 
-  if (status === 'loading') {
-    return (
-      <div className="container">
-        <h1>TR TPM Test App</h1>
-        <p>Loading configuration…</p>
+  const banner =
+    status !== 'ready' ? (
+      <div className="border-b bg-amber-50 px-4 py-2 text-xs text-amber-900">
+        <span className="font-medium">Auth disabled:</span> {message || 'Loading Azure AD configuration…'}
       </div>
+    ) : null
+
+  if (status === 'ready' && msalInstance) {
+    return (
+      <>
+        {banner}
+        <MsalProvider instance={msalInstance}>{children}</MsalProvider>
+      </>
     )
   }
 
-  if (status === 'error' || !msalInstance) {
-    return (
-      <div className="container">
-        <h1>TR TPM Test App</h1>
-        <div className="status-card status-error">
-          <h2>Azure AD Configuration Error</h2>
-          <p>{error || 'Unknown error'}</p>
-        </div>
-      </div>
-    )
-  }
-
-  return <MsalProvider instance={msalInstance}>{children}</MsalProvider>
+  return (
+    <>
+      {banner}
+      {children}
+    </>
+  )
 }

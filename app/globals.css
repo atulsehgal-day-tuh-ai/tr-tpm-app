@@ -1,81 +1,52 @@
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-}
-
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+
+    --border: 240 5.9% 90%;
+
+    --radius: 10px;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
   }
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+/* Dense, Excel-like table helpers */
+.tpm-grid {
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
-.status-card {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin: 1rem 0;
+.tpm-grid th,
+.tpm-grid td {
+  border-right: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
 }
 
-.status-success {
-  border-left: 4px solid #4caf50;
+.tpm-grid th:first-child,
+.tpm-grid td:first-child {
+  border-left: 1px solid hsl(var(--border));
 }
 
-.status-error {
-  border-left: 4px solid #f44336;
-}
-
-.status-warning {
-  border-left: 4px solid #ff9800;
-}
-
-.button {
-  background-color: #0070f3;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  margin: 0.5rem;
-}
-
-.button:hover {
-  background-color: #0051cc;
-}
-
-.button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+.tpm-grid thead th {
+  border-top: 1px solid hsl(var(--border));
 }
