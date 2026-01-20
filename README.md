@@ -75,6 +75,23 @@ npm run migrate
   - Run workflow: **DB Migrate (manual)**
   - Ensure each GitHub Environment (`dev`, `stage`, `prod`) has secret **`DATABASE_URL`** set.
 
+### Resetting schema in Dev/Stage (destructive, for experimentation)
+
+While iterating pre-production, you may prefer to **drop and recreate** tables instead of applying incremental `ALTER TABLE` migrations.
+
+- Local reset (DEV only):
+
+```bash
+# DANGER: drops ALL tables in the public schema
+set ALLOW_DB_RESET=true
+npm run db:reset
+```
+
+- GitHub Actions reset (Dev/Stage only):
+  - Run workflow: **DB Reset (manual, destructive)**
+  - Requires a confirmation input like `RESET-dev` or `RESET-stage`.
+  - This workflow intentionally does **not** support prod.
+
 ### Azure AD Setup
 
 1. Register an application in Azure Portal (Azure Active Directory > App registrations)
