@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { getPool } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/db/audit";
 import { normalizeHeader, parseMdy, parseMmDdYy, parseMoneyLike, parseNumberLike } from "@/lib/csv/utils";
+import { findHeaderIndex, findHeaderIndexStartsWith } from "@/lib/csv/columns";
 import { parse } from "csv-parse/sync";
 
 export const runtime = "nodejs";
@@ -12,6 +13,19 @@ type UploadKind = "actuals_circana" | "promotions" | "budget";
 
 function mustString(v: any): string {
   return (v == null ? "" : String(v)).trim();
+}
+
+async function upsertAccount(pool: ReturnType<typeof getPool>, externalKey: string) {
+  const key = externalKey.trim();
+  if (!key) return;
+  await pool.query(
+    `
+      INSERT INTO account (id, external_key, name, retailer_id)
+      VALUES ($1, $2, NULL, NULL)
+      ON CONFLICT (external_key) DO NOTHING
+    `,
+    [crypto.randomUUID(), key]
+  );
 }
 
 export async function GET(req: NextRequest) {
@@ -95,8 +109,8 @@ export async function POST(req: NextRequest) {
 
     if (kind === "actuals_circana") {
       // Expect: Geography, Product, then many "Week Ending mm-dd-yy" columns.
-      const geographyIdx = header.findIndex((h) => h.toLowerCase() === "geography");
-      const productIdx = header.findIndex((h) => h.toLowerCase() === "product");
+      const geographyIdx = findHeaderIndex(header, ["Geography"]);
+      const productIdx = findHeaderIndex(header, ["Product"]);
 
       if (geographyIdx < 0 || productIdx < 0) {
         throw new Error("Actuals CSV must contain Geography and Product columns");
@@ -114,11 +128,19 @@ export async function POST(req: NextRequest) {
       }
 
       // Insert normalized weekly facts.
+      const seenAccounts = new Set<string>();
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
         const geography = mustString(r[geographyIdx]);
         const product = mustString(r[productIdx]);
         if (!geography || !product) continue;
+
+        // Geography is the "Account key" dimension for actuals.
+        const geoKey = geography.trim();
+        if (geoKey && !seenAccounts.has(geoKey)) {
+          seenAccounts.add(geoKey);
+          await upsertAccount(pool, geoKey);
+        }
 
         for (const wc of weekCols) {
           const rawVal = r[wc.idx];
@@ -139,23 +161,21 @@ export async function POST(req: NextRequest) {
     }
 
     if (kind === "promotions") {
-      // Map columns by normalized header
-      const idx = (name: string) => header.findIndex((h) => h.toLowerCase() === name.toLowerCase());
-
-      const dealIdIdx = idx("Deal ID");
-      const callPointIdx = idx("Call Point");
-      const promoStatusIdx = idx("Promo Status");
-      const promoTypeIdx = header.findIndex((h) => h.toLowerCase().startsWith("promo type"));
-      const ppgIdx = idx("PPG");
-      const costStartIdx = idx("Cost Start Date");
-      const costEndIdx = idx("Cost End Date");
-      const promoStartIdx = idx("Promo Start Date");
-      const promoEndIdx = idx("Promo End Date");
-      const scanBackIdx = idx("Scan Back (per cs)");
-      const trShareIdx = idx("TR Share of Discount");
-      const forecastVolIdx = idx("Forecasted Volume");
-      const circanaGeoIdx = idx("Circana Geography");
-      const rtmIdx = idx("Route to Market");
+      // Map columns by normalized header with aliases (headers can vary).
+      const dealIdIdx = findHeaderIndex(header, ["Deal ID", "DealID", "Deal Id"]);
+      const callPointIdx = findHeaderIndex(header, ["Call Point", "Callpoint", "Account", "Customer"]);
+      const promoStatusIdx = findHeaderIndex(header, ["Promo Status", "Status"]);
+      const promoTypeIdx = findHeaderIndexStartsWith(header, ["Promo Type"]);
+      const ppgIdx = findHeaderIndex(header, ["PPG", "PPG - Item", "Product", "PPG Item"]);
+      const costStartIdx = findHeaderIndex(header, ["Cost Start Date", "Cost Start"]);
+      const costEndIdx = findHeaderIndex(header, ["Cost End Date", "Cost End"]);
+      const promoStartIdx = findHeaderIndex(header, ["Promo Start Date", "Promo Start"]);
+      const promoEndIdx = findHeaderIndex(header, ["Promo End Date", "Promo End"]);
+      const scanBackIdx = findHeaderIndex(header, ["Scan Back (per cs)", "Scan Back", "Scan Back $ (per case)"]);
+      const trShareIdx = findHeaderIndex(header, ["TR Share of Discount", "DA", "Depletion Allowance", "TR Share"]);
+      const forecastVolIdx = findHeaderIndex(header, ["Forecasted Volume", "Forecast Volume", "Forecast"]);
+      const circanaGeoIdx = findHeaderIndex(header, ["Circana Geography", "Geography"]);
+      const rtmIdx = findHeaderIndex(header, ["Route to Market", "RTM"]);
 
       if (dealIdIdx < 0 || callPointIdx < 0 || promoStatusIdx < 0 || ppgIdx < 0) {
         throw new Error("Promotions CSV missing required columns (Deal ID, Call Point, Promo Status, PPG)");
@@ -170,6 +190,11 @@ export async function POST(req: NextRequest) {
         const ppg = mustString(r[ppgIdx]);
 
         if (!dealId && !callPoint && !ppg) continue;
+
+        // Call Point is the combined Retailer+Division "Account key" dimension.
+        if (callPoint) {
+          await upsertAccount(pool, callPoint);
+        }
 
         const costStart = costStartIdx >= 0 ? parseMdy(mustString(r[costStartIdx])) : null;
         const costEnd = costEndIdx >= 0 ? parseMdy(mustString(r[costEndIdx])) : null;
@@ -222,15 +247,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (kind === "budget") {
-      const idx = (name: string) => header.findIndex((h) => h.toLowerCase() === name.toLowerCase());
-      const callPointIdx = idx("Call Point");
-      const ppgIdx = idx("PPG - Item");
-      const weeksIdx = idx("Weeks");
-      const weeklyVolIdx = idx("Weekly Volume (cases per store)");
-      const totalCasesIdx = idx("Total Cases Budgeted");
-      const trShareIdx = idx("TR Share of Discount");
-      const scanBackIdx = idx("Scan Back $ (per case)");
-      const trNetRevenueIdx = idx("TR Net Revenue");
+      const callPointIdx = findHeaderIndex(header, ["Call Point", "Callpoint", "Account", "Customer"]);
+      const ppgIdx = findHeaderIndex(header, ["PPG - Item", "PPG", "Product"]);
+      const weeksIdx = findHeaderIndex(header, ["Weeks"]);
+      const weeklyVolIdx = findHeaderIndex(header, ["Weekly Volume (cases per store)", "Weekly Volume"]);
+      const totalCasesIdx = findHeaderIndex(header, ["Total Cases Budgeted", "Total Cases"]);
+      const trShareIdx = findHeaderIndex(header, ["TR Share of Discount", "DA", "Depletion Allowance", "TR Share"]);
+      const scanBackIdx = findHeaderIndex(header, ["Scan Back $ (per case)", "Scan Back"]);
+      const trNetRevenueIdx = findHeaderIndex(header, ["TR Net Revenue", "Net Revenue"]);
 
       if (callPointIdx < 0 || ppgIdx < 0 || totalCasesIdx < 0) {
         throw new Error("Budget CSV missing required columns (Call Point, PPG - Item, Total Cases Budgeted)");
@@ -241,6 +265,11 @@ export async function POST(req: NextRequest) {
         const callPoint = mustString(r[callPointIdx]);
         const ppgItem = mustString(r[ppgIdx]);
         if (!callPoint || !ppgItem) continue;
+
+        // Call Point is the combined Retailer+Division "Account key" dimension.
+        if (callPoint) {
+          await upsertAccount(pool, callPoint);
+        }
 
         rowCount++;
         await pool.query(
