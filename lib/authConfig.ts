@@ -19,5 +19,7 @@ export function buildMsalConfig(params: {
 }
 
 export const loginRequest: PopupRequest = {
-  scopes: ['User.Read'],
+  // We primarily rely on the ID token for app-to-app API authorization.
+  // Graph scopes can be added later if needed (e.g., User.Read).
+  scopes: ['openid', 'profile', 'email'],
 };

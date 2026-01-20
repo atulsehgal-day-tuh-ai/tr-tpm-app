@@ -17,11 +17,14 @@ function getAuthConfig() {
   // Access token aud commonly becomes api://<clientId> when you expose an API in the app registration.
   const expectedAudience = audienceOverride || (clientId ? `api://${clientId}` : "");
 
-  return { enabled, clientId, tenantId, expectedAudience };
+  // Also accept ID tokens (aud == clientId) so we can authorize API calls without extra "Expose an API" setup.
+  const acceptedAudiences = Array.from(new Set([clientId, expectedAudience].filter(Boolean)));
+
+  return { enabled, clientId, tenantId, expectedAudience, acceptedAudiences };
 }
 
 export async function verifyAzureAdAccessToken(token: string): Promise<VerifiedUser> {
-  const { enabled, tenantId, expectedAudience } = getAuthConfig();
+  const { enabled, tenantId, acceptedAudiences } = getAuthConfig();
   if (!enabled) {
     // Dev-mode: allow calls without verification (auth disabled).
     return { entraOid: "dev", email: "dev@local", name: "Dev Mode" };
@@ -35,7 +38,7 @@ export async function verifyAzureAdAccessToken(token: string): Promise<VerifiedU
 
   const { payload } = await jwtVerify(token, jwks, {
     issuer,
-    audience: expectedAudience,
+    audience: acceptedAudiences,
   });
 
   const entraOid = asString(payload.oid) ?? "";
