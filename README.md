@@ -60,6 +60,21 @@ CREATE DATABASE tr_tpm_db;
 
 2. The application will automatically create the test table on first connection.
 
+### Running schema migrations (recommended)
+
+This repo includes a simple SQL migration runner.
+
+- Local:
+
+```bash
+# Ensure DATABASE_URL is set (or stored in .env.local)
+npm run migrate
+```
+
+- GitHub Actions (Dev/Stage/Prod):
+  - Run workflow: **DB Migrate (manual)**
+  - Ensure each GitHub Environment (`dev`, `stage`, `prod`) has secret **`DATABASE_URL`** set.
+
 ### Azure AD Setup
 
 1. Register an application in Azure Portal (Azure Active Directory > App registrations)

@@ -1,0 +1,50 @@
+name: DB Migrate (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${{ secrets.DATABASE_URL }}" ]]; then
+            echo "Missing required secret DATABASE_URL in GitHub Environment: ${{ inputs.environment }}"
+            echo "Set it in: GitHub → Settings → Environments → ${{ inputs.environment }} → Secrets."
+            exit 1
+          fi
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_ENV: production
+        run: npm run migrate
+
