@@ -85,13 +85,13 @@ export async function POST(req: NextRequest) {
     let rowCount = 0;
     let errorCount = 0;
 
-    async function addError(rowNumber: number | null, message: string, rowJson: any) {
+    const addError = async (rowNumber: number | null, message: string, rowJson: any) => {
       errorCount++;
       await pool.query(
         `INSERT INTO upload_error (id, batch_id, row_number, message, row_json) VALUES ($1,$2,$3,$4,$5)`,
         [crypto.randomUUID(), batchId, rowNumber, message, rowJson ?? null]
       );
-    }
+    };
 
     if (kind === "actuals_circana") {
       // Expect: Geography, Product, then many "Week Ending mm-dd-yy" columns.
