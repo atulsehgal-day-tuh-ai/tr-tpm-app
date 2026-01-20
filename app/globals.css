@@ -39,17 +39,21 @@
 
 .tpm-grid th,
 .tpm-grid td {
-  border-right: 1px solid hsl(var(--border));
-  border-bottom: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border) / 0.55);
+  border-bottom: 1px solid hsl(var(--border) / 0.55);
 }
 
 .tpm-grid th:first-child,
 .tpm-grid td:first-child {
-  border-left: 1px solid hsl(var(--border));
+  border-left: 1px solid hsl(var(--border) / 0.55);
 }
 
 .tpm-grid thead th {
-  border-top: 1px solid hsl(var(--border));
+  border-top: 1px solid hsl(var(--border) / 0.55);
+}
+
+.tpm-grid thead th {
+  backdrop-filter: blur(6px);
 }
 
 /* Make numbers align nicely like Excel */

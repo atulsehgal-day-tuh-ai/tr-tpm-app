@@ -289,6 +289,7 @@ export function TpmGrid({
             ) : (
               <span className="w-4" />
             )}
+            {isSection ? <span className="h-2 w-2 rounded-sm bg-primary/60" /> : null}
             <span>{r.label}</span>
             {r.meta?.locked ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : null}
           </div>
@@ -403,7 +404,7 @@ export function TpmGrid({
 
       <div className="overflow-auto">
         <table className="tpm-grid w-max min-w-full text-sm">
-          <thead className="bg-muted/40">
+          <thead className="bg-muted/30">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header, idx) => {
@@ -414,9 +415,10 @@ export function TpmGrid({
                       key={header.id}
                       className={cn(
                         "px-2 py-2 text-left align-bottom text-xs",
-                        "sticky top-0 z-10 bg-muted/40",
-                        isFirst && "sticky left-0 z-30 bg-muted/40",
-                        isLast && "sticky right-0 z-30 bg-muted/40",
+                        "sticky top-0 z-10 bg-muted/30",
+                        "shadow-[inset_0_-1px_0_rgba(0,0,0,0.04)]",
+                        isFirst && "sticky left-0 z-30 bg-muted/30 shadow-[2px_0_10px_rgba(0,0,0,0.06)]",
+                        isLast && "sticky right-0 z-30 bg-muted/30 shadow-[-2px_0_10px_rgba(0,0,0,0.06)]",
                       )}
                       style={{ minWidth: isFirst ? 300 : 110 }}
                     >
@@ -441,7 +443,7 @@ export function TpmGrid({
                   className={cn(
                     "hover:bg-muted/30",
                     !isSection && zebra && "bg-muted/10",
-                    isSection && "bg-muted/60",
+                    isSection && "bg-gradient-to-r from-muted/60 to-white",
                     locked && !isSection && "bg-muted/20"
                   )}
                 >
@@ -461,7 +463,8 @@ export function TpmGrid({
                           isFirst && !isSection && zebra && "bg-muted/10",
                           isFirst && isSection && "bg-muted/60",
                           isFirst && locked && "bg-muted/20",
-                          isLast && "sticky right-0 z-10 bg-white",
+                          isFirst && "shadow-[2px_0_10px_rgba(0,0,0,0.04)]",
+                          isLast && "sticky right-0 z-10 bg-white shadow-[-2px_0_10px_rgba(0,0,0,0.04)]",
                           isLast && !isSection && zebra && "bg-muted/10",
                           isLast && isSection && "bg-muted/60",
                           isLast && locked && "bg-muted/20",
