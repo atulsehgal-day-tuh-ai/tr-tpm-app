@@ -36,6 +36,11 @@ export default function AdminHome() {
           desc="Enable manager-level rollups + drilldowns on Insights."
           href="/admin/org"
         />
+        <Card
+          title="Uploads"
+          desc="Upload Actuals (Circana), Budget, and Promotions. Data populates the DB with validations."
+          href="/admin/uploads"
+        />
       </div>
     </div>
   );
