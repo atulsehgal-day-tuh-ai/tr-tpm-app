@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import dotenv from "dotenv";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +12,11 @@ function getDatabaseUrl() {
 }
 
 async function main() {
+  // Load local env files for developer convenience.
+  // Next.js automatically loads .env.local, but plain Node scripts do not.
+  dotenv.config({ path: path.resolve(__dirname, "..", ".env.local") });
+  dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+
   const databaseUrl = getDatabaseUrl();
   if (!databaseUrl) {
     console.error("Missing DATABASE_URL (or POSTGRESQLCONNSTR_DATABASE_URL).");
