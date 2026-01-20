@@ -4,6 +4,8 @@ import * as React from "react";
 import { FiltersBar, type Filters } from "@/components/tpm/filters-bar";
 import { createPublix2026Mock } from "@/lib/tpm/mockPublix2026";
 import { formatNumber, sum } from "@/lib/tpm/fiscal";
+import { useIdToken } from "@/components/auth/use-id-token";
+import Link from "next/link";
 
 function periodToQuarter(periodIndex0: number) {
   // P1-P3 => Q1, P4-P6 => Q2, P7-P9 => Q3, P10-P12 => Q4
@@ -11,14 +13,43 @@ function periodToQuarter(periodIndex0: number) {
 }
 
 export default function InsightsPage() {
+  const { token } = useIdToken();
   const [filters, setFilters] = React.useState<Filters>({
     retailer: "Publix",
     division: "Atlanta Division",
     year: 2026,
   });
 
+  const [team, setTeam] = React.useState<{ managerEmail: string; reports: { id: string; email: string }[] } | null>(
+    null
+  );
+  const [teamError, setTeamError] = React.useState<string | null>(null);
+
   // MVP: use existing mock series (until DB-backed rollups land).
   const mock = React.useMemo(() => createPublix2026Mock(), []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function loadTeam() {
+      setTeamError(null);
+      setTeam(null);
+      if (!token) return;
+      try {
+        const res = await fetch("/api/insights/my-team", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Failed to load team");
+        if (!cancelled) setTeam({ managerEmail: data.managerEmail, reports: data.reports });
+      } catch (e: any) {
+        if (!cancelled) setTeamError(e?.message || "Failed to load team");
+      }
+    }
+    loadTeam();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const quarters = React.useMemo(() => {
     const make = (values12: number[]) => {
@@ -89,6 +120,48 @@ export default function InsightsPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="rounded-xl border bg-white shadow-sm">
+        <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold tracking-tight">My Team</div>
+            <div className="text-xs text-muted-foreground">
+              Driven by the admin hierarchy mapping in <Link className="text-primary hover:underline" href="/admin/org">Admin → Team Hierarchy</Link>.
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Managers see team totals + can drill down
+          </div>
+        </div>
+        <div className="px-4 py-3">
+          {!token ? (
+            <div className="text-sm text-muted-foreground">Sign in to load your team.</div>
+          ) : teamError ? (
+            <div className="text-sm text-red-600">{teamError}</div>
+          ) : !team ? (
+            <div className="text-sm text-muted-foreground">Loading team…</div>
+          ) : team.reports.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No direct reports are mapped for <span className="font-medium">{team.managerEmail}</span>. Add mappings in{" "}
+              <Link className="text-primary hover:underline" href="/admin/org">
+                Admin → Team Hierarchy
+              </Link>
+              .
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              {team.reports.map((r) => (
+                <div key={r.id} className="rounded-lg border bg-white px-3 py-2">
+                  <div className="text-xs font-medium">{r.email}</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    Drilldown (next): see this person’s totals and quarter rollups.
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="rounded-xl border bg-white shadow-sm">
