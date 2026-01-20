@@ -27,6 +27,8 @@ export async function verifyAzureAdAccessToken(token: string): Promise<VerifiedU
     return { entraOid: "dev", email: "dev@local", name: "Dev Mode" };
   }
 
+  const asString = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+
   const issuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
   const jwksUri = new URL(`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`);
   const jwks = createRemoteJWKSet(jwksUri);
@@ -36,15 +38,12 @@ export async function verifyAzureAdAccessToken(token: string): Promise<VerifiedU
     audience: expectedAudience,
   });
 
-  const entraOid = String(payload.oid || "");
+  const entraOid = asString(payload.oid) ?? "";
   if (!entraOid) throw new Error("Token missing oid");
 
-  const email =
-    (payload.preferred_username && String(payload.preferred_username)) ||
-    (payload.upn && String(payload.upn)) ||
-    undefined;
+  const email = asString(payload.preferred_username) ?? asString(payload.upn);
 
-  const name = (payload.name && String(payload.name)) || undefined;
+  const name = asString(payload.name);
 
   return { entraOid, email, name };
 }
