@@ -317,7 +317,11 @@ export function TpmGrid({
         if (isEditable) {
           return (
             <Input
-              className="h-7 rounded-sm border-border bg-white px-1.5 text-right text-xs shadow-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40"
+              className={cn(
+                "h-7 rounded-sm px-1.5 text-right text-xs shadow-none",
+                "border border-border bg-amber-50/70",
+                "focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40"
+              )}
               inputMode="numeric"
               value={String(val)}
               onChange={(e) => {
@@ -337,13 +341,15 @@ export function TpmGrid({
         const diffColor =
           isDiff && val < 0 ? "text-red-600" : isDiff && val > 0 ? "text-emerald-700" : "";
         const locked = r.meta?.locked;
+        const isCurrent = idx === currentPeriodIndex;
 
         return (
           <div
             className={cn(
               "text-right text-xs tabular-nums",
               locked && "text-muted-foreground",
-              diffColor
+              diffColor,
+              isCurrent && "font-medium"
             )}
           >
             {formatted}
@@ -367,10 +373,10 @@ export function TpmGrid({
         const formatted = formatNumber(total, { style: r.style });
         const isDiff = r.kind === "diff";
         const diffColor =
-          isDiff && total < 0 ? "text-red-600" : isDiff && total > 0 ? "text-green-700" : "";
+          isDiff && total < 0 ? "text-red-600" : isDiff && total > 0 ? "text-emerald-700" : "";
         const locked = r.meta?.locked;
         return (
-          <div className={cn("text-right text-xs font-medium tabular-nums", locked && "text-muted-foreground", diffColor)}>
+          <div className={cn("text-right text-xs font-semibold tabular-nums", locked && "text-muted-foreground", diffColor)}>
             {formatted}
           </div>
         );
@@ -378,7 +384,7 @@ export function TpmGrid({
     };
 
     return [metricCol, ...periodCols, totalCol];
-  }, []);
+  }, [currentPeriodIndex]);
 
   const table = useReactTable({
     data: rows,
@@ -398,27 +404,33 @@ export function TpmGrid({
           TPM Planner — {filters.retailer} • {filters.division} • {filters.year}
         </div>
         <div className="text-xs text-muted-foreground">
-          Budget/Actuals locked • Promo mechanics editable • Totals pinned right
+          <span className="rounded-full bg-muted px-2 py-0.5">Budget/Actuals locked</span>{" "}
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-900">Promo mechanics editable</span>{" "}
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">Totals pinned</span>
         </div>
       </div>
 
-      <div className="overflow-auto">
+      <div className="isolate overflow-auto">
         <table className="tpm-grid w-max min-w-full text-sm">
-          <thead className="bg-muted/30">
+          <thead className="bg-slate-50">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header, idx) => {
                   const isFirst = idx === 0;
                   const isLast = idx === headerGroup.headers.length - 1;
+                  const isTotal = isLast;
                   return (
                     <th
                       key={header.id}
                       className={cn(
                         "px-2 py-2 text-left align-bottom text-xs",
-                        "sticky top-0 z-10 bg-muted/30",
+                        "sticky top-0 z-10 bg-slate-50 text-slate-700",
                         "shadow-[inset_0_-1px_0_rgba(0,0,0,0.04)]",
-                        isFirst && "sticky left-0 z-30 bg-muted/30 shadow-[2px_0_10px_rgba(0,0,0,0.06)]",
-                        isLast && "sticky right-0 z-30 bg-muted/30 shadow-[-2px_0_10px_rgba(0,0,0,0.06)]",
+                        isFirst &&
+                          "sticky left-0 z-30 bg-slate-50 shadow-[2px_0_12px_rgba(0,0,0,0.08)]",
+                        isLast &&
+                          "sticky right-0 z-30 bg-slate-50 shadow-[-2px_0_12px_rgba(0,0,0,0.08)]",
+                        isTotal && "bg-slate-100",
                       )}
                       style={{ minWidth: isFirst ? 300 : 110 }}
                     >
@@ -450,24 +462,32 @@ export function TpmGrid({
                   {row.getVisibleCells().map((cell, idx) => {
                     const isFirst = idx === 0;
                     const isLast = idx === row.getVisibleCells().length - 1;
+                    const isTotal = isLast;
                     const isEditablePromo =
                       row.original.kind === "promo" && row.original.meta?.editable;
+                    const isCurrentPeriodCell =
+                      !isFirst &&
+                      !isLast &&
+                      row.original.kind !== "section" &&
+                      idx - 1 === currentPeriodIndex;
                     return (
                       <td
                         key={cell.id}
                         className={cn(
                           "px-2 py-1 align-middle",
                           isSection && "py-2",
-                          isEditablePromo && "bg-white",
+                          isEditablePromo && "bg-amber-50/40",
+                          isCurrentPeriodCell && "bg-primary/5",
                           isFirst && "sticky left-0 z-10 bg-white",
                           isFirst && !isSection && zebra && "bg-muted/10",
                           isFirst && isSection && "bg-muted/60",
                           isFirst && locked && "bg-muted/20",
-                          isFirst && "shadow-[2px_0_10px_rgba(0,0,0,0.04)]",
-                          isLast && "sticky right-0 z-10 bg-white shadow-[-2px_0_10px_rgba(0,0,0,0.04)]",
+                          isFirst && "shadow-[2px_0_12px_rgba(0,0,0,0.06)]",
+                          isLast && "sticky right-0 z-10 bg-white shadow-[-2px_0_12px_rgba(0,0,0,0.06)]",
                           isLast && !isSection && zebra && "bg-muted/10",
                           isLast && isSection && "bg-muted/60",
                           isLast && locked && "bg-muted/20",
+                          isTotal && "bg-slate-50",
                         )}
                         style={{ minWidth: isFirst ? 300 : 110 }}
                       >

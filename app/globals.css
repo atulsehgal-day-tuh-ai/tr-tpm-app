@@ -53,7 +53,8 @@
 }
 
 .tpm-grid thead th {
-  backdrop-filter: blur(6px);
+  /* Keep headers opaque to avoid “see-through” overlap while scrolling */
+  backdrop-filter: none;
 }
 
 /* Make numbers align nicely like Excel */
