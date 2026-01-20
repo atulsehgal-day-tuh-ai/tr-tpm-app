@@ -27,7 +27,7 @@ export function FiltersBar({
   const divisions = divisionsByRetailer[value.retailer] ?? [];
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white px-3 py-2">
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-white/80 px-3 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div className="flex items-center gap-2">
         <div className="text-xs font-medium text-muted-foreground">Retailer</div>
         <div className="w-[180px]">
@@ -99,7 +99,7 @@ export function FiltersBar({
       </div>
 
       <div className="ml-auto hidden text-xs text-muted-foreground md:block">
-        4-4-5 fiscal periods • dense spreadsheet view
+        4-4-5 fiscal periods • high-density spreadsheet
       </div>
     </div>
   );

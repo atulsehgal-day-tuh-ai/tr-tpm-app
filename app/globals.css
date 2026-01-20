@@ -50,3 +50,8 @@
 .tpm-grid thead th {
   border-top: 1px solid hsl(var(--border));
 }
+
+/* Make numbers align nicely like Excel */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

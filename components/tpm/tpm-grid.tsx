@@ -274,7 +274,7 @@ export function TpmGrid({
           <div
             className={cn(
               "flex items-center gap-2 whitespace-nowrap",
-              isSection && "font-semibold"
+              isSection && "font-semibold uppercase tracking-wide text-[11px]"
             )}
             style={{ paddingLeft: indent * 14 }}
           >
@@ -316,7 +316,7 @@ export function TpmGrid({
         if (isEditable) {
           return (
             <Input
-              className="h-7 rounded-sm border-border px-1.5 text-right text-xs"
+              className="h-7 rounded-sm border-border bg-white px-1.5 text-right text-xs shadow-none focus-visible:ring-1 focus-visible:ring-primary/70"
               inputMode="numeric"
               value={String(val)}
               onChange={(e) => {
@@ -377,7 +377,7 @@ export function TpmGrid({
     };
 
     return [metricCol, ...periodCols, totalCol];
-  }, [salesDifference, salesPctChange, forecastPromo]);
+  }, []);
 
   const table = useReactTable({
     data: rows,
@@ -391,13 +391,13 @@ export function TpmGrid({
   });
 
   return (
-    <div className="rounded-lg border bg-white">
-      <div className="flex items-center justify-between border-b px-3 py-2">
-        <div className="text-sm font-semibold">
+    <div className="rounded-xl border bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-white/70 px-4 py-2.5">
+        <div className="text-sm font-semibold tracking-tight">
           TPM Planner — {filters.retailer} • {filters.division} • {filters.year}
         </div>
         <div className="text-xs text-muted-foreground">
-          Budget/Actuals locked • Forecast promo mechanics editable
+          Budget/Actuals locked • Promo mechanics editable • Totals pinned right
         </div>
       </div>
 
@@ -413,12 +413,12 @@ export function TpmGrid({
                     <th
                       key={header.id}
                       className={cn(
-                        "px-2 py-2 text-left align-bottom",
-                        "text-xs",
-                        isFirst && "sticky left-0 z-20 bg-muted/40",
-                        isLast && "sticky right-0 z-20 bg-muted/40",
+                        "px-2 py-2 text-left align-bottom text-xs",
+                        "sticky top-0 z-10 bg-muted/40",
+                        isFirst && "sticky left-0 z-30 bg-muted/40",
+                        isLast && "sticky right-0 z-30 bg-muted/40",
                       )}
-                      style={{ minWidth: isFirst ? 260 : 110 }}
+                      style={{ minWidth: isFirst ? 300 : 110 }}
                     >
                       {header.isPlaceholder
                         ? null
@@ -430,15 +430,17 @@ export function TpmGrid({
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => {
+            {table.getRowModel().rows.map((row, rowIndex) => {
               const r = row.original;
               const isSection = r.kind === "section";
               const locked = r.meta?.locked;
+              const zebra = rowIndex % 2 === 1;
               return (
                 <tr
                   key={row.id}
                   className={cn(
                     "hover:bg-muted/30",
+                    !isSection && zebra && "bg-muted/10",
                     isSection && "bg-muted/60",
                     locked && !isSection && "bg-muted/20"
                   )}
@@ -446,20 +448,25 @@ export function TpmGrid({
                   {row.getVisibleCells().map((cell, idx) => {
                     const isFirst = idx === 0;
                     const isLast = idx === row.getVisibleCells().length - 1;
+                    const isEditablePromo =
+                      row.original.kind === "promo" && row.original.meta?.editable;
                     return (
                       <td
                         key={cell.id}
                         className={cn(
                           "px-2 py-1 align-middle",
                           isSection && "py-2",
+                          isEditablePromo && "bg-white",
                           isFirst && "sticky left-0 z-10 bg-white",
+                          isFirst && !isSection && zebra && "bg-muted/10",
                           isFirst && isSection && "bg-muted/60",
                           isFirst && locked && "bg-muted/20",
                           isLast && "sticky right-0 z-10 bg-white",
+                          isLast && !isSection && zebra && "bg-muted/10",
                           isLast && isSection && "bg-muted/60",
                           isLast && locked && "bg-muted/20",
                         )}
-                        style={{ minWidth: isFirst ? 260 : 110 }}
+                        style={{ minWidth: isFirst ? 300 : 110 }}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
@@ -472,7 +479,7 @@ export function TpmGrid({
         </table>
       </div>
 
-      <div className="border-t px-3 py-2 text-[11px] text-muted-foreground">
+      <div className="border-t bg-white/70 px-4 py-2 text-[11px] text-muted-foreground">
         Assumptions: Base price ${BASE_PRICE}, promo price ${PROMO_PRICE}. Difference uses Actuals for periods before the current month; otherwise Forecast.
       </div>
     </div>
