@@ -2,7 +2,7 @@ import { TpmPlanner } from "@/components/tpm/tpm-planner";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-white to-muted/40">
+    <main className="min-h-screen bg-gradient-to-b from-white via-white to-muted/50">
       <div className="mx-auto max-w-[1520px] px-4 py-4">
         <div className="mb-3 rounded-xl border bg-white/80 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
           <div className="flex flex-wrap items-end justify-between gap-2">

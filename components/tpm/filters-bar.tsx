@@ -29,7 +29,7 @@ export function FiltersBar({
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-white/80 px-3 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div className="flex items-center gap-2">
-        <div className="text-xs font-medium text-muted-foreground">Retailer</div>
+        <div className="text-[11px] font-medium text-muted-foreground">Retailer</div>
         <div className="w-[180px]">
           <Select
             value={value.retailer}
@@ -55,7 +55,7 @@ export function FiltersBar({
       <Separator orientation="vertical" className="h-7" />
 
       <div className="flex items-center gap-2">
-        <div className="text-xs font-medium text-muted-foreground">Division</div>
+        <div className="text-[11px] font-medium text-muted-foreground">Division</div>
         <div className="w-[220px]">
           <Select
             value={value.division}
@@ -78,7 +78,7 @@ export function FiltersBar({
       <Separator orientation="vertical" className="h-7" />
 
       <div className="flex items-center gap-2">
-        <div className="text-xs font-medium text-muted-foreground">Year</div>
+        <div className="text-[11px] font-medium text-muted-foreground">Year</div>
         <div className="w-[120px]">
           <Select
             value={String(value.year)}

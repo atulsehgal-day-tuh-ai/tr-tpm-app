@@ -274,13 +274,13 @@ export function TpmGrid({
           <div
             className={cn(
               "flex items-center gap-2 whitespace-nowrap",
-              isSection && "font-semibold uppercase tracking-wide text-[11px]"
+              isSection && "font-semibold tracking-wide text-[11px] text-muted-foreground"
             )}
             style={{ paddingLeft: indent * 14 }}
           >
             {canExpand ? (
               <button
-                className="text-muted-foreground hover:text-foreground"
+                className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 onClick={row.getToggleExpandedHandler()}
                 aria-label={isExpanded ? "Collapse" : "Expand"}
               >
@@ -316,7 +316,7 @@ export function TpmGrid({
         if (isEditable) {
           return (
             <Input
-              className="h-7 rounded-sm border-border bg-white px-1.5 text-right text-xs shadow-none focus-visible:ring-1 focus-visible:ring-primary/70"
+              className="h-7 rounded-sm border-border bg-white px-1.5 text-right text-xs shadow-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40"
               inputMode="numeric"
               value={String(val)}
               onChange={(e) => {
@@ -334,7 +334,7 @@ export function TpmGrid({
         const formatted = formatNumber(val, { style: r.style });
         const isDiff = r.kind === "diff";
         const diffColor =
-          isDiff && val < 0 ? "text-red-600" : isDiff && val > 0 ? "text-green-700" : "";
+          isDiff && val < 0 ? "text-red-600" : isDiff && val > 0 ? "text-emerald-700" : "";
         const locked = r.meta?.locked;
 
         return (
