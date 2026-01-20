@@ -92,6 +92,12 @@ npm run db:reset
   - Requires a confirmation input like `RESET-dev` or `RESET-stage`.
   - This workflow intentionally does **not** support prod.
 
+After reset, the DB is seeded with baseline master data (see `migrations/002_seed_baseline.sql`):
+- Retailers/Divisions: Publix, Kroger (+ sample divisions)
+- Promo Types: Frontline, 10/$10, Buy 2 Get 1, Scan Back
+- Promo applicability: enabled for all seeded divisions
+- Fiscal calendar config: default 4-4-5 pattern (admin can edit weeks/periods)
+
 ### Azure AD Setup
 
 1. Register an application in Azure Portal (Azure Active Directory > App registrations)
