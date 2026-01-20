@@ -15,6 +15,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'disabled'>('loading')
   const [message, setMessage] = useState<string>('')
   const [config, setConfig] = useState<PublicConfig | null>(null)
+  const [msalInstance, setMsalInstance] = useState<PublicClientApplication | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -40,8 +41,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
           return
         }
 
+        // Initialize MSAL *before* rendering MsalProvider to avoid runtime errors on first load.
+        const instance = new PublicClientApplication(
+          buildMsalConfig({
+            clientId: data.clientId,
+            tenantId: data.tenantId,
+            redirectUri: data.redirectUri,
+          })
+        )
+        await instance.initialize()
+
         if (!cancelled) {
           setConfig(data)
+          setMsalInstance(instance)
           setStatus('ready')
         }
       } catch (e: any) {
@@ -57,22 +69,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       cancelled = true
     }
   }, [])
-
-  const msalInstance = useMemo(() => {
-    if (!config) return null
-    const instance = new PublicClientApplication(
-      buildMsalConfig({
-        clientId: config.clientId,
-        tenantId: config.tenantId,
-        redirectUri: config.redirectUri,
-      })
-    )
-    instance.initialize().catch((err) => {
-      // Do not throw; show a helpful message instead.
-      console.error('MSAL initialization error:', err)
-    })
-    return instance
-  }, [config])
 
   const banner =
     status !== 'ready' ? (
