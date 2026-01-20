@@ -11,8 +11,16 @@ import {
 import { ChevronDown, ChevronRight, Lock } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { fiscalPeriods, formatNumber, getCurrentPeriodIndexForYear, sum } from "@/lib/tpm/fiscal";
+import {
+  formatDateRange,
+  formatIsoWeekRange,
+  formatNumber,
+  getCurrentPeriodIndexForYear,
+  getFiscalPeriodsForYear,
+  sum,
+} from "@/lib/tpm/fiscal";
 import { PromoType, Publix2026Mock, createPublix2026Mock } from "@/lib/tpm/mockPublix2026";
 
 type CellStyle = "currency" | "number" | "percent";
@@ -106,6 +114,8 @@ export function TpmGrid({
     () => getCurrentPeriodIndexForYear(filters.year),
     [filters.year]
   );
+
+  const periods = React.useMemo(() => getFiscalPeriodsForYear(filters.year), [filters.year]);
 
   const salesDifference = React.useMemo(() => {
     const bud = clamp12(mock.sales.budget);
@@ -297,15 +307,28 @@ export function TpmGrid({
       },
     };
 
-    const periodCols: ColumnDef<RowT>[] = fiscalPeriods.map((p, idx) => ({
+    const periodCols: ColumnDef<RowT>[] = periods.map((p, idx) => ({
       id: p.key,
       header: () => (
-        <div className="text-center leading-tight">
-          <div className="text-[11px] font-semibold">{p.key}</div>
-          <div className="text-[10px] text-muted-foreground">
-            {p.monthShort} • {p.weeks}w
-          </div>
-        </div>
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="cursor-help text-center leading-tight">
+                <div className="text-[11px] font-semibold">{p.key}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {p.monthShort} • {p.weeks}w
+                </div>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center">
+              <div className="font-medium">{p.key} ({p.monthShort})</div>
+              <div className="mt-0.5 text-muted-foreground">
+                {formatIsoWeekRange(p.isoWeekStart, p.isoWeekEnd)}
+              </div>
+              <div className="mt-1">{formatDateRange(p.startDate, p.endDate)}</div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ),
       cell: ({ row }) => {
         const r = row.original;
@@ -384,7 +407,7 @@ export function TpmGrid({
     };
 
     return [metricCol, ...periodCols, totalCol];
-  }, [currentPeriodIndex]);
+  }, [currentPeriodIndex, periods]);
 
   const table = useReactTable({
     data: rows,
@@ -399,7 +422,10 @@ export function TpmGrid({
 
   return (
     <div className="rounded-xl border bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-white/70 px-4 py-2.5">
+      <div className="relative overflow-hidden border-b px-4 py-2.5">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/15 via-white to-emerald-50" />
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-sky-400 to-emerald-400" />
+        <div className="relative flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm font-semibold tracking-tight">
           TPM Planner — {filters.retailer} • {filters.division} • {filters.year}
         </div>
@@ -407,6 +433,7 @@ export function TpmGrid({
           <span className="rounded-full bg-muted px-2 py-0.5">Budget/Actuals locked</span>{" "}
           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-900">Promo mechanics editable</span>{" "}
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">Totals pinned</span>
+        </div>
         </div>
       </div>
 
@@ -419,6 +446,9 @@ export function TpmGrid({
                   const isFirst = idx === 0;
                   const isLast = idx === headerGroup.headers.length - 1;
                   const isTotal = isLast;
+                  const isCurrent =
+                    header.id.startsWith("P") &&
+                    periods[currentPeriodIndex]?.key === (header.id as any);
                   return (
                     <th
                       key={header.id}
@@ -431,6 +461,7 @@ export function TpmGrid({
                         isLast &&
                           "sticky right-0 z-30 bg-slate-50 shadow-[-2px_0_12px_rgba(0,0,0,0.08)]",
                         isTotal && "bg-slate-100",
+                        isCurrent && "bg-primary/10 text-slate-900",
                       )}
                       style={{ minWidth: isFirst ? 300 : 110 }}
                     >
@@ -478,15 +509,18 @@ export function TpmGrid({
                           isSection && "py-2",
                           isEditablePromo && "bg-amber-50/40",
                           isCurrentPeriodCell && "bg-primary/5",
-                          isFirst && "sticky left-0 z-10 bg-white",
-                          isFirst && !isSection && zebra && "bg-muted/10",
-                          isFirst && isSection && "bg-muted/60",
-                          isFirst && locked && "bg-muted/20",
+                          // Sticky cells must be fully opaque (no alpha) to prevent overlap/bleed-through.
+                          isFirst && "sticky left-0 z-20",
+                          isFirst && !isSection && !locked && zebra && "bg-slate-50",
+                          isFirst && !isSection && !locked && !zebra && "bg-white",
+                          isFirst && locked && "bg-slate-50",
+                          isFirst && isSection && "bg-slate-100",
                           isFirst && "shadow-[2px_0_12px_rgba(0,0,0,0.06)]",
-                          isLast && "sticky right-0 z-10 bg-white shadow-[-2px_0_12px_rgba(0,0,0,0.06)]",
-                          isLast && !isSection && zebra && "bg-muted/10",
-                          isLast && isSection && "bg-muted/60",
-                          isLast && locked && "bg-muted/20",
+                          isLast && "sticky right-0 z-20 shadow-[-2px_0_12px_rgba(0,0,0,0.06)]",
+                          isLast && !isSection && !locked && zebra && "bg-slate-50",
+                          isLast && !isSection && !locked && !zebra && "bg-white",
+                          isLast && locked && "bg-slate-50",
+                          isLast && isSection && "bg-slate-100",
                           isTotal && "bg-slate-50",
                         )}
                         style={{ minWidth: isFirst ? 300 : 110 }}
