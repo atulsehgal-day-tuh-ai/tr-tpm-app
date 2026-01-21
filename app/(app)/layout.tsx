@@ -6,8 +6,9 @@ import { cn } from "@/lib/utils";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireAuth>
-      <div className="min-h-screen bg-gradient-to-b from-white via-white to-muted/50">
+      <div className="min-h-screen">
         <header className="sticky top-0 z-40 border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+          <div className="h-0.5 w-full bg-gradient-to-r from-sky-500 via-cyan-400 to-emerald-400" />
           <div className="mx-auto flex max-w-[1520px] items-center justify-between gap-4 px-4 py-3">
             <div className="flex items-center gap-4">
               <Link href="/grid" className="flex items-center gap-2">
@@ -52,7 +53,9 @@ function NavLink({
       href={href}
       className={cn(
         "rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground",
-        "hover:bg-muted hover:text-foreground"
+        "hover:bg-white/70 hover:text-foreground hover:shadow-sm",
+        "border border-transparent hover:border-border/60",
+        "backdrop-blur"
       )}
     >
       {children}

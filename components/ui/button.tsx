@@ -19,13 +19,19 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Comp
         className={cn(
-          "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50",
+          "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          "disabled:pointer-events-none disabled:opacity-50",
           variant === "default" &&
-            "bg-primary text-primary-foreground hover:bg-primary/90",
+            [
+              "text-primary-foreground shadow-sm",
+              "bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500",
+              "hover:brightness-[1.03] active:brightness-[0.98]",
+            ].join(" "),
           variant === "secondary" &&
-            "bg-muted text-foreground hover:bg-muted/80",
+            "bg-white/70 text-foreground border border-border hover:bg-white shadow-sm backdrop-blur",
           variant === "outline" &&
-            "border border-border bg-background hover:bg-muted/50",
+            "border border-border bg-white/60 hover:bg-white shadow-sm backdrop-blur",
           variant === "ghost" && "hover:bg-muted/60",
           size === "default" && "h-9 px-3",
           size === "sm" && "h-8 px-2.5 text-xs",
