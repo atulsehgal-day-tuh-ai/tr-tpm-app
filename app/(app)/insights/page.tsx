@@ -10,6 +10,7 @@ import { SegmentedControl } from "@/components/insights/segmented-control";
 import { BucketTrendLines } from "@/components/insights/bucket-trend-lines";
 import { buildMockInsightsSeries, type InsightsViewKey } from "@/lib/tpm/insights-series";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { demoScaleFactor } from "@/lib/tpm/demo-scale";
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -93,7 +94,16 @@ export default function InsightsPage() {
     }
     return 1;
   }, [scope, team]);
-  const scopedSeries = React.useMemo(() => scaleInsightsSeries(series, scopeFactor), [series, scopeFactor]);
+
+  const filterFactor = React.useMemo(() => {
+    const ppgKey = filters.ppg === "__ALL__" ? "ALL" : filters.ppg;
+    return demoScaleFactor(`${filters.retailerDivision}||${ppgKey}||${filters.year}`);
+  }, [filters.retailerDivision, filters.ppg, filters.year]);
+
+  const scopedSeries = React.useMemo(
+    () => scaleInsightsSeries(series, scopeFactor * filterFactor),
+    [series, scopeFactor, filterFactor]
+  );
 
   React.useEffect(() => {
     let cancelled = false;

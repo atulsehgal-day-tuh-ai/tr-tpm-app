@@ -31,12 +31,14 @@ export function FiltersBar({
   token,
   allowAllPpg = false,
   requirePpg = false,
+  excludePpgs = [],
 }: {
   value: Filters;
   onChange: (next: Filters) => void;
   token?: string | null;
   allowAllPpg?: boolean;
   requirePpg?: boolean;
+  excludePpgs?: string[];
 }) {
   const [opts, setOpts] = React.useState<{ retailerDivisions: string[]; ppgs: string[] }>({
     retailerDivisions: fallbackRetailerDivisions,
@@ -74,11 +76,16 @@ export function FiltersBar({
   // Ensure required PPG is set to something valid.
   React.useEffect(() => {
     if (!requirePpg) return;
-    const valid = opts.ppgs.includes(value.ppg);
-    if (!value.ppg || !valid) {
-      onChange({ ...value, ppg: opts.ppgs[0] ?? "" });
+    const filtered = opts.ppgs.filter((p) => !excludePpgs.includes(p));
+    const valid = filtered.includes(value.ppg);
+    if (!value.ppg || !valid || value.ppg === "__ALL__") {
+      onChange({ ...value, ppg: filtered[0] ?? "" });
     }
-  }, [requirePpg, opts.ppgs, value, onChange]);
+  }, [requirePpg, opts.ppgs, excludePpgs, value, onChange]);
+
+  const ppgOptions = React.useMemo(() => {
+    return opts.ppgs.filter((p) => !excludePpgs.includes(p));
+  }, [opts.ppgs, excludePpgs]);
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-white/80 px-3 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
@@ -119,7 +126,7 @@ export function FiltersBar({
               {allowAllPpg ? (
                 <SelectItem value="__ALL__">All PPGs</SelectItem>
               ) : null}
-              {opts.ppgs.map((p) => (
+              {ppgOptions.map((p) => (
                 <SelectItem key={p} value={p}>
                   {p}
                 </SelectItem>

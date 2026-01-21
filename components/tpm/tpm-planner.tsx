@@ -9,6 +9,7 @@ import { PromoType, createPublix2026Mock } from "@/lib/tpm/mockPublix2026";
 import { Button } from "@/components/ui/button";
 import { useIdToken } from "@/components/auth/use-id-token";
 import { cn } from "@/lib/utils";
+import { demoScaleFactor, scalePublixMockForDemo } from "@/lib/tpm/demo-scale";
 
 function clamp12(values: number[]) {
   if (values.length === 12) return values;
@@ -56,12 +57,14 @@ export function TpmPlanner() {
   });
 
   const parsed = React.useMemo(() => parseRetailerDivision(filters.retailerDivision), [filters.retailerDivision]);
+  const demoKey = React.useMemo(() => `${filters.retailerDivision}||${filters.ppg}||${filters.year}`, [filters.retailerDivision, filters.ppg, filters.year]);
 
   // MVP data source (mock) — will be replaced by DB-backed rollups later.
   const mock = React.useMemo(() => {
     const base = createPublix2026Mock();
-    return { ...base, division: parsed.division || base.division };
-  }, [parsed.division]);
+    const withDiv = { ...base, division: parsed.division || base.division };
+    return scalePublixMockForDemo(withDiv, demoScaleFactor(demoKey));
+  }, [parsed.division, demoKey]);
 
   const [forecastPromo, setForecastPromo] = React.useState<Record<PromoType, number[]>>(() => ({
     Frontline: clamp12(mock.volume.forecastPromo.Frontline),
@@ -209,7 +212,13 @@ export function TpmPlanner() {
 
   return (
     <div className="space-y-3">
-      <FiltersBar value={filters} onChange={setFilters} token={token} requirePpg />
+      <FiltersBar
+        value={filters}
+        onChange={setFilters}
+        token={token}
+        requirePpg
+        excludePpgs={["Talking Rain Company Total"]}
+      />
 
       <div className="rounded-xl border bg-white/80 px-3 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -250,8 +259,16 @@ export function TpmPlanner() {
         </div>
       </div>
 
-      <GridKpis filters={{ retailer: parsed.retailer, division: parsed.division, year: filters.year }} mock={mock} forecastPromo={forecastPromo} />
-      <TpmGrid filters={{ retailer: parsed.retailer, division: parsed.division, year: filters.year }} forecastPromo={forecastPromo} setForecastPromo={setForecastPromo} />
+      <GridKpis
+        filters={{ retailer: parsed.retailer, division: parsed.division, year: filters.year }}
+        mock={mock}
+        forecastPromo={forecastPromo}
+      />
+      <TpmGrid
+        filters={{ retailer: parsed.retailer, division: parsed.division, year: filters.year, demoKey }}
+        forecastPromo={forecastPromo}
+        setForecastPromo={setForecastPromo}
+      />
     </div>
   );
 }
