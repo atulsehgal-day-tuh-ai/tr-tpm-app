@@ -5,6 +5,7 @@ import { PublicClientApplication } from '@azure/msal-browser'
 import { buildMsalConfig } from '@/lib/authConfig'
 import { useEffect, useMemo, useState } from 'react'
 import { AuthRuntimeProvider } from '@/components/auth/auth-runtime'
+import { ClientErrorBoundary } from '@/components/error/client-error-boundary'
 
 type PublicConfig = {
   clientId: string
@@ -83,7 +84,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <>
         {banner}
         <AuthRuntimeProvider value={{ status: 'ready' }}>
-          <MsalProvider instance={msalInstance}>{children}</MsalProvider>
+          <MsalProvider instance={msalInstance}>
+            <ClientErrorBoundary>{children}</ClientErrorBoundary>
+          </MsalProvider>
         </AuthRuntimeProvider>
       </>
     )
@@ -92,7 +95,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <>
       {banner}
-      <AuthRuntimeProvider value={{ status, message }}>{children}</AuthRuntimeProvider>
+      <AuthRuntimeProvider value={{ status, message }}>
+        <ClientErrorBoundary>{children}</ClientErrorBoundary>
+      </AuthRuntimeProvider>
     </>
   )
 }
