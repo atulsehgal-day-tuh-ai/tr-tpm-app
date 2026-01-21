@@ -7,8 +7,7 @@ import { formatNumber, sum } from "@/lib/tpm/fiscal";
 import { useIdToken } from "@/components/auth/use-id-token";
 import Link from "next/link";
 import { SegmentedControl } from "@/components/insights/segmented-control";
-import { GroupedStackedBars } from "@/components/insights/grouped-stacked-bars";
-import { TrendLines } from "@/components/insights/trend-lines";
+import { BucketTrendLines } from "@/components/insights/bucket-trend-lines";
 import { buildMockInsightsSeries, type InsightsViewKey } from "@/lib/tpm/insights-series";
 
 function periodToQuarter(periodIndex0: number) {
@@ -25,6 +24,7 @@ export default function InsightsPage() {
     year: 2026,
   });
   const [view, setView] = React.useState<InsightsViewKey>("quarter");
+  const [pacing, setPacing] = React.useState<"bucket" | "cumulative">("bucket");
 
   const [team, setTeam] = React.useState<{ managerEmail: string; reports: { id: string; email: string }[] } | null>(
     null
@@ -100,15 +100,27 @@ export default function InsightsPage() {
               <span className="font-medium text-foreground">forecast through year-end</span>. Switch views to see Period, Quarter, or Annual rollups.
             </div>
           </div>
-          <SegmentedControl
-            value={view}
-            onChange={setView}
-            items={[
-              { key: "period", label: "Period" },
-              { key: "quarter", label: "Quarter" },
-              { key: "annual", label: "Annual" },
-            ]}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            {view !== "annual" ? (
+              <SegmentedControl
+                value={pacing}
+                onChange={setPacing}
+                items={[
+                  { key: "bucket", label: "Bucket" },
+                  { key: "cumulative", label: "Cumulative" },
+                ]}
+              />
+            ) : null}
+            <SegmentedControl
+              value={view}
+              onChange={setView}
+              items={[
+                { key: "period", label: "Period" },
+                { key: "quarter", label: "Quarter" },
+                { key: "annual", label: "Annual" },
+              ]}
+            />
+          </div>
         </div>
       </div>
 
@@ -172,81 +184,72 @@ export default function InsightsPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <InsightsPanel
-          title="Retail Sales"
-          subtitle="CY (Actuals+Forecast) vs Budget vs LY"
-          view={view}
-          buckets={series.view[view].labels}
-          actual={series.view[view].sales.cyActual}
-          forecast={series.view[view].sales.cyForecast}
-          budget={series.view[view].sales.budget}
-          lastYear={series.view[view].sales.lastYear}
-          trend={view === "annual" ? series.weekly.sales : null}
-          cutoffIndex={series.cutoff.weekIndex}
-          unit="currency"
-        />
-        <InsightsPanel
-          title="Volume (Cases)"
-          subtitle="CY (Actuals+Forecast) vs Budget vs LY"
-          view={view}
-          buckets={series.view[view].labels}
-          actual={series.view[view].volume.cyActual}
-          forecast={series.view[view].volume.cyForecast}
-          budget={series.view[view].volume.budget}
-          lastYear={series.view[view].volume.lastYear}
-          trend={view === "annual" ? series.weekly.volume : null}
-          cutoffIndex={series.cutoff.weekIndex}
-          unit="number"
-        />
-        <InsightsPanel
-          title="Trade Spend"
-          subtitle="CY (Actuals+Forecast) vs Budget vs LY"
-          view={view}
-          buckets={series.view[view].labels}
-          actual={series.view[view].spend.cyActual}
-          forecast={series.view[view].spend.cyForecast}
-          budget={series.view[view].spend.budget}
-          lastYear={series.view[view].spend.lastYear}
-          trend={view === "annual" ? series.weekly.spend : null}
-          cutoffIndex={series.cutoff.weekIndex}
-          unit="currency"
-        />
+      {view === "annual" ? (
         <div className="rounded-xl border bg-white shadow-sm">
           <div className="border-b px-4 py-3">
-            <div className="text-sm font-semibold tracking-tight">Quick Comparisons</div>
+            <div className="text-sm font-semibold tracking-tight">Annual Summary</div>
             <div className="text-xs text-muted-foreground">
-              YTD uses actuals through last completed week; FY uses actuals+forecast through year-end.
+              FY uses actuals+forecast through year-end. YTD uses actuals through last completed week.
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
-            <CompareTile
-              title="FY Sales vs Budget"
-              a={series.annual.sales.cyTotal}
-              b={series.annual.sales.budget}
-              style="currency"
-            />
-            <CompareTile
-              title="FY Sales vs LY"
-              a={series.annual.sales.cyTotal}
-              b={series.annual.sales.lastYear}
-              style="currency"
-            />
-            <CompareTile
-              title="YTD Volume vs LY"
-              a={series.ytd.volume.cyActual}
-              b={series.ytd.volume.lastYearYtd}
-              style="number"
-            />
-            <CompareTile
-              title="FY Spend vs Budget"
-              a={series.annual.spend.cyTotal}
-              b={series.annual.spend.budget}
-              style="currency"
-            />
+            <CompareTile title="FY Sales vs Budget" a={series.annual.sales.cyTotal} b={series.annual.sales.budget} style="currency" />
+            <CompareTile title="FY Sales vs LY" a={series.annual.sales.cyTotal} b={series.annual.sales.lastYear} style="currency" />
+            <CompareTile title="YTD Volume vs LY" a={series.ytd.volume.cyActual} b={series.ytd.volume.lastYearYtd} style="number" />
+            <CompareTile title="FY Spend vs Budget" a={series.annual.spend.cyTotal} b={series.annual.spend.budget} style="currency" />
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <TrendPanel
+            title="Retail Sales"
+            subtitle="CY total vs LY (solid→dashed after cutoff)"
+            labels={series.view[view].labels}
+            cyActual={series.view[view].sales.cyActual}
+            cyForecast={series.view[view].sales.cyForecast}
+            lastYear={series.view[view].sales.lastYear}
+            cutoffBucketIndex={view === "period" ? series.cutoff.periodIndex : series.cutoff.quarterIndex}
+            unit="currency"
+            cumulative={pacing === "cumulative"}
+          />
+          <TrendPanel
+            title="Volume (Cases)"
+            subtitle="CY total vs LY (solid→dashed after cutoff)"
+            labels={series.view[view].labels}
+            cyActual={series.view[view].volume.cyActual}
+            cyForecast={series.view[view].volume.cyForecast}
+            lastYear={series.view[view].volume.lastYear}
+            cutoffBucketIndex={view === "period" ? series.cutoff.periodIndex : series.cutoff.quarterIndex}
+            unit="number"
+            cumulative={pacing === "cumulative"}
+          />
+          <TrendPanel
+            title="Trade Spend"
+            subtitle="CY total vs LY (solid→dashed after cutoff)"
+            labels={series.view[view].labels}
+            cyActual={series.view[view].spend.cyActual}
+            cyForecast={series.view[view].spend.cyForecast}
+            lastYear={series.view[view].spend.lastYear}
+            cutoffBucketIndex={view === "period" ? series.cutoff.periodIndex : series.cutoff.quarterIndex}
+            unit="currency"
+            cumulative={pacing === "cumulative"}
+          />
+          <div className="rounded-xl border bg-white shadow-sm">
+            <div className="border-b px-4 py-3">
+              <div className="text-sm font-semibold tracking-tight">Quick Comparisons</div>
+              <div className="text-xs text-muted-foreground">
+                FY uses actuals+forecast through year-end. YTD uses actuals through last completed week.
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
+              <CompareTile title="FY Sales vs Budget" a={series.annual.sales.cyTotal} b={series.annual.sales.budget} style="currency" />
+              <CompareTile title="FY Sales vs LY" a={series.annual.sales.cyTotal} b={series.annual.sales.lastYear} style="currency" />
+              <CompareTile title="YTD Volume vs LY" a={series.ytd.volume.cyActual} b={series.ytd.volume.lastYearYtd} style="number" />
+              <CompareTile title="FY Spend vs Budget" a={series.annual.spend.cyTotal} b={series.annual.spend.budget} style="currency" />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-white shadow-sm">
         <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
@@ -350,30 +353,26 @@ function QuarterRow({
   );
 }
 
-function InsightsPanel({
+function TrendPanel({
   title,
   subtitle,
-  view,
-  buckets,
-  actual,
-  forecast,
-  budget,
+  labels,
+  cyActual,
+  cyForecast,
   lastYear,
-  trend,
-  cutoffIndex,
+  cutoffBucketIndex,
   unit,
+  cumulative,
 }: {
   title: string;
   subtitle: string;
-  view: InsightsViewKey;
-  buckets: string[];
-  actual: number[];
-  forecast: number[];
-  budget: number[];
+  labels: string[];
+  cyActual: number[];
+  cyForecast: number[];
   lastYear: number[];
-  trend: { cyActual: number[]; cyForecast: number[]; lastYear: number[]; labels: string[] } | null;
-  cutoffIndex: number | null;
+  cutoffBucketIndex: number | null;
   unit: "currency" | "number";
+  cumulative: boolean;
 }) {
   return (
     <div className="rounded-xl border bg-white shadow-sm">
@@ -383,35 +382,19 @@ function InsightsPanel({
             <div className="text-sm font-semibold tracking-tight">{title}</div>
             <div className="text-xs text-muted-foreground">{subtitle}</div>
           </div>
-          <div className="text-[11px] text-muted-foreground">View: {view === "period" ? "Period" : view === "quarter" ? "Quarter" : "Annual"}</div>
+          <div className="text-[11px] text-muted-foreground">{cumulative ? "Cumulative" : "Bucket"}</div>
         </div>
       </div>
       <div className="p-4">
-        <GroupedStackedBars
-          labels={buckets}
-          cyActual={actual}
-          cyForecast={forecast}
-          budget={budget}
+        <BucketTrendLines
+          labels={labels}
+          cyActual={cyActual}
+          cyForecast={cyForecast}
           lastYear={lastYear}
+          cutoffBucketIndex={cutoffBucketIndex}
           unit={unit}
+          cumulative={cumulative}
         />
-        {trend ? (
-          <div className="mt-4 rounded-lg border bg-white p-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div className="text-xs font-semibold tracking-tight">Time trend (weekly)</div>
-              <div className="text-[11px] text-muted-foreground">CY vs LY • cutoff marker shows last completed week</div>
-            </div>
-            <div className="mt-2">
-              <TrendLines
-                labels={trend.labels}
-                cyTotal={trend.cyActual.map((v, i) => v + (trend.cyForecast[i] ?? 0))}
-                ly={trend.lastYear}
-                cutoffIndex={cutoffIndex}
-                unit={unit}
-              />
-            </div>
-          </div>
-        ) : null}
       </div>
     </div>
   );

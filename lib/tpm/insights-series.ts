@@ -194,6 +194,8 @@ export function buildMockInsightsSeries({
   const annualLabels = [`FY${year}`];
 
   const weekToQuarterIndex = weekToPeriodIndex.map((pIdx) => quarterOfPeriodIndex(pIdx));
+  const cutoffPeriodIndex = cutoffIndex == null ? null : (weekToPeriodIndex[cutoffIndex] ?? null);
+  const cutoffQuarterIndex = cutoffIndex == null ? null : (weekToQuarterIndex[cutoffIndex] ?? null);
 
   const buildView = (kind: InsightsViewKey): ViewBlock => {
     if (kind === "period") {
@@ -301,6 +303,8 @@ export function buildMockInsightsSeries({
       weekIndex: cutoffIndex,
       weekEndDate: cutoffWeekEndDate,
       nextWeekEndDate,
+      periodIndex: cutoffPeriodIndex,
+      quarterIndex: cutoffQuarterIndex,
     },
     weekly: {
       labels: weekLabels,
