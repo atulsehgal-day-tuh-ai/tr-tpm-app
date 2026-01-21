@@ -27,12 +27,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </nav>
             </div>
             <div className="flex items-center gap-3">
-              <Link
-                href="/login"
-                className="hidden text-xs text-muted-foreground hover:text-foreground md:inline"
-              >
-                Login page
-              </Link>
               <AuthButtons />
             </div>
           </div>
