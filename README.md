@@ -60,6 +60,44 @@ CREATE DATABASE tr_tpm_db;
 
 2. The application will automatically create the test table on first connection.
 
+### Running schema migrations (recommended)
+
+This repo includes a simple SQL migration runner.
+
+- Local:
+
+```bash
+# Ensure DATABASE_URL is set (or stored in .env.local)
+npm run migrate
+```
+
+- GitHub Actions (Dev/Stage/Prod):
+  - Run workflow: **DB Migrate (manual)**
+  - Ensure each GitHub Environment (`dev`, `stage`, `prod`) has secret **`DATABASE_URL`** set.
+
+### Resetting schema in Dev/Stage (destructive, for experimentation)
+
+While iterating pre-production, you may prefer to **drop and recreate** tables instead of applying incremental `ALTER TABLE` migrations.
+
+- Local reset (DEV only):
+
+```bash
+# DANGER: drops ALL tables in the public schema
+set ALLOW_DB_RESET=true
+npm run db:reset
+```
+
+- GitHub Actions reset (Dev/Stage only):
+  - Run workflow: **DB Reset (manual, destructive)**
+  - Requires a confirmation input like `RESET-dev` or `RESET-stage`.
+  - This workflow intentionally does **not** support prod.
+
+After reset, the DB is seeded with baseline master data (see `migrations/002_seed_baseline.sql`):
+- Retailers/Divisions: Publix, Kroger (+ sample divisions)
+- Promo Types: Frontline, 10/$10, Buy 2 Get 1, Scan Back
+- Promo applicability: enabled for all seeded divisions
+- Fiscal calendar config: default 4-4-5 pattern (admin can edit weeks/periods)
+
 ### Azure AD Setup
 
 1. Register an application in Azure Portal (Azure Active Directory > App registrations)

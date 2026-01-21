@@ -1,0 +1,64 @@
+name: DB Reset (manual, destructive)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - stage
+      confirm:
+        description: 'Type "RESET-<env>" to confirm (e.g., RESET-dev)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Check confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="RESET-${{ inputs.environment }}"
+          if [[ "${{ inputs.confirm }}" != "$expected" ]]; then
+            echo "Confirmation mismatch."
+            echo "Expected: $expected"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${{ secrets.DATABASE_URL }}" ]]; then
+            echo "Missing required secret DATABASE_URL in GitHub Environment: ${{ inputs.environment }}"
+            exit 1
+          fi
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Reset DB (DROP SCHEMA public CASCADE) + re-run migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_ENV: production
+          ALLOW_DB_RESET: "true"
+        run: npm run db:reset
+

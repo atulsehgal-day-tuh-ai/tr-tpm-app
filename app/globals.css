@@ -1,81 +1,73 @@
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-}
-
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+    /* Talking Rain-inspired: clean, sparkling, premium */
+    --background: 0 0% 100%;
+    --foreground: 222.2 47.4% 11.2%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 200 45% 96%;
+    --muted-foreground: 215 18% 38%;
+
+    /* Teal-blue primary to match “sparkling water” energy without neon */
+    --primary: 198 93% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --border: 214 35% 90%;
+
+    --radius: 10px;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
   }
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+/* Subtle “sparkle” background texture (safe for spreadsheets: low contrast) */
+body {
+  background-image:
+    radial-gradient(900px 500px at 12% 0%, hsl(var(--primary) / 0.10), transparent 60%),
+    radial-gradient(700px 420px at 88% 18%, rgba(16, 185, 129, 0.10), transparent 55%),
+    radial-gradient(700px 420px at 18% 90%, rgba(99, 102, 241, 0.08), transparent 60%);
+  background-attachment: fixed;
 }
 
-.status-card {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin: 1rem 0;
+/* Dense, Excel-like table helpers */
+.tpm-grid {
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
-.status-success {
-  border-left: 4px solid #4caf50;
+.tpm-grid th,
+.tpm-grid td {
+  border-right: 1px solid hsl(var(--border) / 0.55);
+  border-bottom: 1px solid hsl(var(--border) / 0.55);
 }
 
-.status-error {
-  border-left: 4px solid #f44336;
+.tpm-grid th:first-child,
+.tpm-grid td:first-child {
+  border-left: 1px solid hsl(var(--border) / 0.55);
 }
 
-.status-warning {
-  border-left: 4px solid #ff9800;
+.tpm-grid thead th {
+  border-top: 1px solid hsl(var(--border) / 0.55);
 }
 
-.button {
-  background-color: #0070f3;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  margin: 0.5rem;
+.tpm-grid thead th {
+  /* Keep headers opaque to avoid “see-through” overlap while scrolling */
+  backdrop-filter: none;
 }
 
-.button:hover {
-  background-color: #0051cc;
-}
-
-.button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+/* Make numbers align nicely like Excel */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
