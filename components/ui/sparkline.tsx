@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import { cn } from "@/lib/utils";
 
 function clamp(n: number, min: number, max: number) {
@@ -24,19 +23,18 @@ export function Sparkline({
   const h = height;
   const pad = 2;
 
-  const points = React.useMemo(() => {
-    const vals = data.filter((v) => Number.isFinite(v));
-    const minV = vals.length ? Math.min(...vals) : 0;
-    const maxV = vals.length ? Math.max(...vals) : 1;
-    const denom = maxV - minV || 1;
+  // Keep this component hook-free (helps avoid hook-order issues in complex pages).
+  const vals = data.filter((v) => Number.isFinite(v));
+  const minV = vals.length ? Math.min(...vals) : 0;
+  const maxV = vals.length ? Math.max(...vals) : 1;
+  const denom = maxV - minV || 1;
 
-    return data.map((v, i) => {
-      const x = pad + (i * (w - pad * 2)) / Math.max(1, data.length - 1);
-      const t = (v - minV) / denom;
-      const y = pad + (1 - clamp(t, 0, 1)) * (h - pad * 2);
-      return { x, y };
-    });
-  }, [data, h]);
+  const points = data.map((v, i) => {
+    const x = pad + (i * (w - pad * 2)) / Math.max(1, data.length - 1);
+    const t = (v - minV) / denom;
+    const y = pad + (1 - clamp(t, 0, 1)) * (h - pad * 2);
+    return { x, y };
+  });
 
   const d = points
     .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
