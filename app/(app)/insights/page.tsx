@@ -70,7 +70,7 @@ export default function InsightsPage() {
     division: "Atlanta Division",
     year: 2026,
   });
-  const [view, setView] = React.useState<InsightsViewKey>("quarter");
+  const [view, setView] = React.useState<InsightsViewKey>("period");
   const [pacing, setPacing] = React.useState<"bucket" | "cumulative">("bucket");
 
   const [team, setTeam] = React.useState<{ managerEmail: string; reports: { id: string; email: string }[] } | null>(
