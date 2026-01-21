@@ -10,6 +10,7 @@ import { SegmentedControl } from "@/components/insights/segmented-control";
 import { BucketTrendLines } from "@/components/insights/bucket-trend-lines";
 import { buildMockInsightsSeries, type InsightsViewKey } from "@/lib/tpm/insights-series";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { demoScaleFactor } from "@/lib/tpm/demo-scale";
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -66,8 +67,8 @@ export default function InsightsPage() {
   // Insights dashboard
   const { token } = useIdToken();
   const [filters, setFilters] = React.useState<Filters>({
-    retailer: "Publix",
-    division: "Atlanta Division",
+    retailerDivision: "Publix — Atlanta Division",
+    ppg: "__ALL__",
     year: 2026,
   });
   const [view, setView] = React.useState<InsightsViewKey>("period");
@@ -93,7 +94,16 @@ export default function InsightsPage() {
     }
     return 1;
   }, [scope, team]);
-  const scopedSeries = React.useMemo(() => scaleInsightsSeries(series, scopeFactor), [series, scopeFactor]);
+
+  const filterFactor = React.useMemo(() => {
+    const ppgKey = filters.ppg === "__ALL__" ? "ALL" : filters.ppg;
+    return demoScaleFactor(`${filters.retailerDivision}||${ppgKey}||${filters.year}`);
+  }, [filters.retailerDivision, filters.ppg, filters.year]);
+
+  const scopedSeries = React.useMemo(
+    () => scaleInsightsSeries(series, scopeFactor * filterFactor),
+    [series, scopeFactor, filterFactor]
+  );
 
   React.useEffect(() => {
     let cancelled = false;
@@ -175,7 +185,7 @@ export default function InsightsPage() {
         onScopeChange={setScope}
       />
 
-      <FiltersBar value={filters} onChange={setFilters} />
+      <FiltersBar value={filters} onChange={setFilters} token={token} allowAllPpg />
 
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">

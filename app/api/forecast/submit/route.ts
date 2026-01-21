@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const retailer = (body?.retailer || "").trim();
   const division = (body?.division || "").trim();
+  const ppg = (body?.ppg || "").trim() || "ALL";
   const year = Number(body?.year);
 
   if (!retailer || !division || !Number.isFinite(year)) {
@@ -28,10 +29,10 @@ export async function POST(req: NextRequest) {
     `
       SELECT data
       FROM forecast_snapshot
-      WHERE user_entra_oid = $1 AND retailer = $2 AND division = $3 AND year = $4 AND status = 'draft'
+      WHERE user_entra_oid = $1 AND retailer = $2 AND division = $3 AND year = $4 AND ppg = $5 AND status = 'draft'
       LIMIT 1
     `,
-    [user.entraOid, retailer, division, year]
+    [user.entraOid, retailer, division, year, ppg]
   );
 
   if (!draft.rows[0]) {
@@ -41,11 +42,11 @@ export async function POST(req: NextRequest) {
   const id = crypto.randomUUID();
   const inserted = await pool.query(
     `
-      INSERT INTO forecast_snapshot (id, user_entra_oid, user_email, retailer, division, year, status, saved_at, submitted_at, data)
-      VALUES ($1, $2, $3, $4, $5, $6, 'submitted', NOW(), NOW(), $7::jsonb)
+      INSERT INTO forecast_snapshot (id, user_entra_oid, user_email, retailer, division, year, ppg, status, saved_at, submitted_at, data)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'submitted', NOW(), NOW(), $8::jsonb)
       RETURNING id, submitted_at
     `,
-    [id, user.entraOid, user.email || null, retailer, division, year, JSON.stringify(draft.rows[0].data)]
+    [id, user.entraOid, user.email || null, retailer, division, year, ppg, JSON.stringify(draft.rows[0].data)]
   );
 
   return NextResponse.json({ ok: true, submittedId: inserted.rows[0]?.id, submittedAt: inserted.rows[0]?.submitted_at });

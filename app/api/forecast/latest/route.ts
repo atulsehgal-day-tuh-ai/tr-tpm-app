@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
 
   const retailer = qp(req, "retailer");
   const division = qp(req, "division");
+  const ppg = qp(req, "ppg") || "ALL";
   const year = Number(qp(req, "year"));
   if (!retailer || !division || !Number.isFinite(year)) {
     return NextResponse.json({ ok: false, error: "Missing retailer/division/year" }, { status: 400 });
@@ -30,21 +31,21 @@ export async function GET(req: NextRequest) {
     `
       SELECT id, status, saved_at, submitted_at, data
       FROM forecast_snapshot
-      WHERE user_entra_oid = $1 AND retailer = $2 AND division = $3 AND year = $4 AND status = 'draft'
+      WHERE user_entra_oid = $1 AND retailer = $2 AND division = $3 AND year = $4 AND ppg = $5 AND status = 'draft'
       LIMIT 1
     `,
-    [user.entraOid, retailer, division, year]
+    [user.entraOid, retailer, division, year, ppg]
   );
 
   const submitted = await pool.query(
     `
       SELECT id, status, saved_at, submitted_at, data
       FROM forecast_snapshot
-      WHERE user_entra_oid = $1 AND retailer = $2 AND division = $3 AND year = $4 AND status = 'submitted'
+      WHERE user_entra_oid = $1 AND retailer = $2 AND division = $3 AND year = $4 AND ppg = $5 AND status = 'submitted'
       ORDER BY submitted_at DESC NULLS LAST, saved_at DESC
       LIMIT 1
     `,
-    [user.entraOid, retailer, division, year]
+    [user.entraOid, retailer, division, year, ppg]
   );
 
   return NextResponse.json({
