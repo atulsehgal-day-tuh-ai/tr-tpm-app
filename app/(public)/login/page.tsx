@@ -15,19 +15,23 @@ export default function LoginPage() {
   const isAuthed = (accounts?.length ?? 0) > 0;
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-emerald-50">
+    <main className="relative min-h-screen">
+      {/* Background image (place file under public/brand/ and reference it here) */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: "url('/brand/tpm-hero.jpg')" }}
+      />
+      {/* Overlay for readability */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/85 via-white/80 to-emerald-50/85" />
+
       <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-10 md:flex-row md:items-center md:justify-between">
-        <div className="max-w-xl">
+        <div className="relative max-w-xl">
           <div className="inline-flex items-center gap-2 rounded-full border bg-white/70 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
             <span className="h-2 w-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500" />
             Talking Rain • Retailer KPI Forecast
           </div>
           <h1 className="mt-4 text-4xl font-semibold tracking-tight md:text-5xl">
-            Trade Planning,
-            <span className="bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 bg-clip-text text-transparent">
-              {" "}
-              without broken spreadsheets
-            </span>
+            Trade Promotion Management
           </h1>
           <p className="mt-3 text-base leading-7 text-muted-foreground">
             Forecast Cases, DA (Depletion Allowance), and Scan Back across a 4‑4‑5 calendar. Upload Actuals and
@@ -66,7 +70,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="w-full max-w-xl">
+        <div className="relative w-full max-w-xl">
           <div className="relative overflow-hidden rounded-3xl border bg-white p-6 shadow-sm">
             <div className="pointer-events-none absolute inset-0 opacity-60">
               <div className="absolute -left-20 -top-20 h-72 w-72 rounded-full bg-sky-200 blur-3xl" />
