@@ -1,5 +1,3 @@
-import { TpmPlanner } from "@/components/tpm/tpm-planner";
-
 export default function GridPage() {
   return (
     <div className="space-y-3">
@@ -18,7 +16,9 @@ export default function GridPage() {
           </div>
         </div>
       </div>
-      <TpmPlanner />
+      <div className="rounded-xl border bg-white p-4 text-sm text-muted-foreground shadow-sm">
+        Debug mode: grid temporarily disabled while we isolate a client-side crash (React error #310).
+      </div>
     </div>
   );
 }
