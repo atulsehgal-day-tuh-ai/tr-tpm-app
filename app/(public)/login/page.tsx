@@ -6,6 +6,7 @@ import { loginRequest } from "@/lib/authConfig";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuthRuntime } from "@/components/auth/auth-runtime";
+import { Droplets, LineChart, ShieldCheck, Sparkles } from "lucide-react";
 
 export default function LoginPage() {
   const auth = useAuthRuntime();
@@ -18,43 +19,50 @@ export default function LoginPage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-10 md:flex-row md:items-center md:justify-between">
         <div className="max-w-xl">
           <div className="inline-flex items-center gap-2 rounded-full border bg-white/70 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
-            <span className="h-2 w-2 rounded-full bg-sky-500" />
-            Talking Rain • Trade Promotion Management
+            <span className="h-2 w-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500" />
+            Talking Rain • Retailer KPI Forecast
           </div>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
-            Retailer KPI Forecast Model
+          <h1 className="mt-4 text-4xl font-semibold tracking-tight md:text-5xl">
+            Trade Planning,
+            <span className="bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 bg-clip-text text-transparent">
+              {" "}
+              without broken spreadsheets
+            </span>
           </h1>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            A spreadsheet-fast experience for forecasting volume and viewing KPIs—without risking broken formulas.
-            Built for sparkling water and probiotic beverage teams that need clarity, not chaos.
+          <p className="mt-3 text-base leading-7 text-muted-foreground">
+            Forecast Cases, DA (Depletion Allowance), and Scan Back across a 4‑4‑5 calendar. Upload Actuals and
+            Promotions, then review KPIs by Retailer → Division → PPG with manager/team rollups.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Button
               className={cn("min-w-[160px]")}
               onClick={async () => {
-                if (auth.status !== "ready") return;
-                if (isAuthed) return;
-                await instance.loginPopup(loginRequest);
+                if (auth.status !== "ready") {
+                  window.location.href = "/grid";
+                  return;
+                }
+                if (!isAuthed) {
+                  await instance.loginPopup(loginRequest);
+                }
                 window.location.href = "/grid";
               }}
-              disabled={auth.status !== "ready"}
             >
-              {isAuthed ? "Continue" : "Sign in with Azure AD"}
+              {auth.status !== "ready" ? "Open app" : isAuthed ? "Open dashboard" : "Sign in"}
             </Button>
 
             <Button
               variant="secondary"
               onClick={() => (window.location.href = "/grid")}
             >
-              Go to app
+              View grid
             </Button>
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Feature title="4-4-5 periods" detail="Period-grain budgeting, forecasting, and KPI rollups." />
-            <Feature title="Locked formulas" detail="Only forecast inputs are editable; everything else derives." />
-            <Feature title="Team rollups" detail="Managers see totals for their team and drill into individuals." />
+            <Feature icon={<Sparkles className="h-4 w-4" />} title="4‑4‑5 periods" detail="Fast rollups by period and quarter." />
+            <Feature icon={<ShieldCheck className="h-4 w-4" />} title="Locked logic" detail="Only forecast inputs are editable." />
+            <Feature icon={<LineChart className="h-4 w-4" />} title="KPI visuals" detail="Trends + quarterly dashboards." />
           </div>
         </div>
 
@@ -66,31 +74,36 @@ export default function LoginPage() {
               <div className="absolute bottom-0 left-16 h-64 w-64 rounded-full bg-indigo-100 blur-3xl" />
             </div>
             <div className="relative">
-              <div className="text-sm font-semibold tracking-tight">Welcome</div>
+              <div className="flex items-center gap-2">
+                <Droplets className="h-5 w-5 text-sky-600" />
+                <div className="text-base font-semibold tracking-tight">Welcome</div>
+              </div>
               <div className="mt-1 text-sm text-muted-foreground">
-                Sign in to load your retailers, divisions, promo types, and forecasts.
+                Sign in to unlock uploads, admin mappings, and manager/team rollups.
               </div>
               <div className="mt-6 rounded-2xl border bg-white/80 p-4">
-                <div className="text-xs font-medium text-muted-foreground">What you’ll do here</div>
+                <div className="text-xs font-medium text-muted-foreground">Quick start</div>
                 <ul className="mt-3 space-y-2 text-sm">
                   <li className="flex items-start gap-2">
                     <span className="mt-1 h-2 w-2 rounded-full bg-sky-500" />
-                    Edit forecast volume at the 4-4-5 period level.
+                    Upload Actuals (Circana) + Promotions + Budget.
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="mt-1 h-2 w-2 rounded-full bg-emerald-500" />
-                    Compare Budget vs Actuals vs Forecast with instant totals.
+                    Map accounts → divisions + promo type rules (Admin).
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="mt-1 h-2 w-2 rounded-full bg-indigo-500" />
-                    Review quarterly rollups and drilldowns by team.
+                    Forecast volume and review KPI trends + quarters.
                   </li>
                 </ul>
               </div>
 
-              <div className="mt-4 text-xs text-muted-foreground">
-                Note: If Azure AD is not configured, the app will run in a “no-auth” mode (for dev).
-              </div>
+              {auth.status !== "ready" ? (
+                <div className="mt-4 text-xs text-amber-800">
+                  Auth isn’t configured for this environment yet. You can still explore the UI, but admin APIs will be restricted.
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -99,11 +112,16 @@ export default function LoginPage() {
   );
 }
 
-function Feature({ title, detail }: { title: string; detail: string }) {
+function Feature({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
   return (
-    <div className="rounded-2xl border bg-white/70 p-4 shadow-sm backdrop-blur">
-      <div className="text-sm font-semibold tracking-tight">{title}</div>
-      <div className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</div>
+    <div className="rounded-2xl border bg-white/70 p-4 shadow-sm backdrop-blur hover:bg-white/80">
+      <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-muted/40 text-foreground">
+          {icon}
+        </span>
+        {title}
+      </div>
+      <div className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</div>
     </div>
   );
 }

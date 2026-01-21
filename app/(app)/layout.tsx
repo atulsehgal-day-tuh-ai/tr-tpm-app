@@ -13,7 +13,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-4">
               <Link href="/grid" className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500" />
-                <span className="text-sm font-semibold tracking-tight">
+                <span className="text-base font-semibold tracking-tight">
                   Talking Rain TPM
                 </span>
               </Link>
@@ -52,10 +52,10 @@ function NavLink({
     <Link
       href={href}
       className={cn(
-        "rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground",
+        "rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground",
         "hover:bg-white/70 hover:text-foreground hover:shadow-sm",
-        "border border-transparent hover:border-border/60",
-        "backdrop-blur"
+        "border border-transparent hover:border-border/60 backdrop-blur",
+        "transition-colors"
       )}
     >
       {children}
