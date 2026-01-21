@@ -51,8 +51,8 @@ type GridRow = {
   };
 };
 
-const BASE_PRICE = 20;
-const PROMO_PRICE = 10;
+export const BASE_PRICE = 20;
+export const PROMO_PRICE = 10;
 
 function clamp12(values: number[]) {
   if (values.length === 12) return values;
@@ -70,16 +70,14 @@ function usePublixMock(filters: { retailer: string; division: string; year: numb
 
 export function TpmGrid({
   filters,
+  forecastPromo,
+  setForecastPromo,
 }: {
   filters: { retailer: string; division: string; year: number };
+  forecastPromo: Record<PromoType, number[]>;
+  setForecastPromo: React.Dispatch<React.SetStateAction<Record<PromoType, number[]>>>;
 }) {
   const mock = usePublixMock(filters);
-
-  const [forecastPromo, setForecastPromo] = React.useState<Record<PromoType, number[]>>(() => ({
-    Frontline: clamp12(mock.volume.forecastPromo.Frontline),
-    "10/$10": clamp12(mock.volume.forecastPromo["10/$10"]),
-    B2G1: clamp12(mock.volume.forecastPromo.B2G1),
-  }));
 
   // Derived series
   const forecastTotalVolume = React.useMemo(() => {
@@ -145,6 +143,30 @@ export function TpmGrid({
     const budSpend = clamp12(mock.spend.budget);
     const actSpend = clamp12(mock.spend.actual);
 
+    const spendDiffFcstBud = Array.from({ length: 12 }, (_, i) => (forecastSpend[i] ?? 0) - (budSpend[i] ?? 0));
+    const spendPctFcstBud = Array.from({ length: 12 }, (_, i) => {
+      const denom = budSpend[i] || 1;
+      return spendDiffFcstBud[i] / denom;
+    });
+
+    const spendDiffActBud = Array.from({ length: 12 }, (_, i) => (actSpend[i] ?? 0) - (budSpend[i] ?? 0));
+    const spendPctActBud = Array.from({ length: 12 }, (_, i) => {
+      const denom = budSpend[i] || 1;
+      return spendDiffActBud[i] / denom;
+    });
+
+    const volDiffActLy = Array.from({ length: 12 }, (_, i) => (actVol[i] ?? 0) - (lyVol[i] ?? 0));
+    const volPctActLy = Array.from({ length: 12 }, (_, i) => {
+      const denom = lyVol[i] || 1;
+      return volDiffActLy[i] / denom;
+    });
+
+    const salesDiffFcstBud = Array.from({ length: 12 }, (_, i) => (forecastSales[i] ?? 0) - (budSales[i] ?? 0));
+    const salesPctFcstBud = Array.from({ length: 12 }, (_, i) => {
+      const denom = budSales[i] || 1;
+      return salesDiffFcstBud[i] / denom;
+    });
+
     const promoRow = (id: string, label: string, promo: PromoType): GridRow => ({
       id,
       label,
@@ -187,10 +209,17 @@ export function TpmGrid({
       },
       {
         id: "sales-pct",
-        label: "% Change",
+        label: "% Change (Act/Fcst - Bud)",
         kind: "pct",
         style: "percent",
         values: salesPctChange,
+      },
+      {
+        id: "sales-pct-fcst-bud",
+        label: "%Δ (Forecast - Budget)",
+        kind: "pct",
+        style: "percent",
+        values: salesPctFcstBud,
       },
 
       {
@@ -223,6 +252,8 @@ export function TpmGrid({
         ],
       },
       { id: "vol-ly", label: "LY Cases (Last Year)", kind: "ly", style: "number", values: lyVol },
+      { id: "vol-diff-ly", label: "Δ Cases (Actual - LY)", kind: "diff", style: "number", values: volDiffActLy },
+      { id: "vol-pct-ly", label: "%Δ (Actual - LY)", kind: "pct", style: "percent", values: volPctActLy },
 
       {
         id: "sec-spend",
@@ -246,6 +277,34 @@ export function TpmGrid({
         kind: "forecast",
         style: "currency",
         values: forecastSpend,
+      },
+      {
+        id: "spend-diff-fcst-bud",
+        label: "$Δ (Forecast - Budget)",
+        kind: "diff",
+        style: "currency",
+        values: spendDiffFcstBud,
+      },
+      {
+        id: "spend-pct-fcst-bud",
+        label: "%Δ (Forecast - Budget)",
+        kind: "pct",
+        style: "percent",
+        values: spendPctFcstBud,
+      },
+      {
+        id: "spend-diff-act-bud",
+        label: "$Δ (Actual - Budget)",
+        kind: "diff",
+        style: "currency",
+        values: spendDiffActBud,
+      },
+      {
+        id: "spend-pct-act-bud",
+        label: "%Δ (Actual - Budget)",
+        kind: "pct",
+        style: "percent",
+        values: spendPctActBud,
       },
     ];
   }, [
@@ -407,7 +466,7 @@ export function TpmGrid({
     };
 
     return [metricCol, ...periodCols, totalCol];
-  }, [currentPeriodIndex, periods]);
+  }, [currentPeriodIndex, periods, setForecastPromo]);
 
   const table = useReactTable({
     data: rows,

@@ -1,5 +1,8 @@
+"use client";
+
 import * as React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { RequireAuth, AuthButtons } from "@/components/auth/auth-ui";
 import { cn } from "@/lib/utils";
 
@@ -48,16 +51,22 @@ function NavLink({
   href: string;
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const active = pathname === href || (href !== "/grid" && pathname?.startsWith(href));
   return (
     <Link
       href={href}
       className={cn(
-        "rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground",
-        "hover:bg-white/70 hover:text-foreground hover:shadow-sm",
-        "border border-transparent hover:border-border/60 backdrop-blur",
+        "relative rounded-2xl px-4 py-2 text-sm font-semibold tracking-tight",
+        active ? "text-slate-900" : "text-slate-600 hover:text-slate-900",
         "transition-colors"
       )}
     >
+      {active ? (
+        <span className="absolute inset-0 -z-10 rounded-2xl bg-gradient-to-r from-sky-500/15 via-white to-emerald-500/15 ring-1 ring-sky-400/25" />
+      ) : (
+        <span className="absolute inset-0 -z-10 rounded-2xl bg-white/0 hover:bg-white/60 hover:ring-1 hover:ring-slate-200" />
+      )}
       {children}
     </Link>
   );
