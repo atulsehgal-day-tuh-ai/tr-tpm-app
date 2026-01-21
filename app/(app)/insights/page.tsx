@@ -9,10 +9,57 @@ import Link from "next/link";
 import { SegmentedControl } from "@/components/insights/segmented-control";
 import { BucketTrendLines } from "@/components/insights/bucket-trend-lines";
 import { buildMockInsightsSeries, type InsightsViewKey } from "@/lib/tpm/insights-series";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-function periodToQuarter(periodIndex0: number) {
-  // P1-P3 => Q1, P4-P6 => Q2, P7-P9 => Q3, P10-P12 => Q4
-  return Math.floor(periodIndex0 / 3);
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function hashToUnitInterval(s: string) {
+  // Deterministic, fast hash for mock scope scaling (not crypto).
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  // 0..1
+  return (h >>> 0) / 4294967295;
+}
+
+function scaleArr(arr: number[], factor: number) {
+  return arr.map((v) => v * factor);
+}
+
+function scaleMetricBlock(
+  m: { cyActual: number[]; cyForecast: number[]; budget: number[]; lastYear: number[] },
+  factor: number
+) {
+  return {
+    cyActual: scaleArr(m.cyActual, factor),
+    cyForecast: scaleArr(m.cyForecast, factor),
+    budget: scaleArr(m.budget, factor),
+    lastYear: scaleArr(m.lastYear, factor),
+  };
+}
+
+function scaleInsightsSeries(s: any, factor: number) {
+  if (!s || typeof s !== "object") return s;
+  return {
+    ...s,
+    view: {
+      period: { ...s.view.period, sales: scaleMetricBlock(s.view.period.sales, factor), volume: scaleMetricBlock(s.view.period.volume, factor), spend: scaleMetricBlock(s.view.period.spend, factor) },
+      quarter: { ...s.view.quarter, sales: scaleMetricBlock(s.view.quarter.sales, factor), volume: scaleMetricBlock(s.view.quarter.volume, factor), spend: scaleMetricBlock(s.view.quarter.spend, factor) },
+      annual: { ...s.view.annual, sales: scaleMetricBlock(s.view.annual.sales, factor), volume: scaleMetricBlock(s.view.annual.volume, factor), spend: scaleMetricBlock(s.view.annual.spend, factor) },
+    },
+    annual: {
+      sales: { ...s.annual.sales, cyTotal: s.annual.sales.cyTotal * factor, budget: s.annual.sales.budget * factor, lastYear: s.annual.sales.lastYear * factor },
+      volume: { ...s.annual.volume, cyTotal: s.annual.volume.cyTotal * factor, budget: s.annual.volume.budget * factor, lastYear: s.annual.volume.lastYear * factor },
+      spend: { ...s.annual.spend, cyTotal: s.annual.spend.cyTotal * factor, budget: s.annual.spend.budget * factor, lastYear: s.annual.spend.lastYear * factor },
+    },
+    ytd: {
+      volume: { ...s.ytd.volume, cyActual: s.ytd.volume.cyActual * factor, lastYearYtd: s.ytd.volume.lastYearYtd * factor },
+    },
+  };
 }
 
 export default function InsightsPage() {
@@ -30,10 +77,23 @@ export default function InsightsPage() {
     null
   );
   const [teamError, setTeamError] = React.useState<string | null>(null);
+  const [scope, setScope] = React.useState<string>("me");
 
   // MVP: use existing mock series (until DB-backed rollups land).
   const mock = React.useMemo(() => createPublix2026Mock(), []);
   const series = React.useMemo(() => buildMockInsightsSeries({ mock, year: filters.year }), [mock, filters.year]);
+  const scopeFactor = React.useMemo(() => {
+    if (scope === "me") return 1;
+    if (scope === "team") return 1.35;
+    if (scope.startsWith("report:")) {
+      const id = scope.slice("report:".length);
+      const email = team?.reports.find((r) => r.id === id)?.email ?? id;
+      const t = hashToUnitInterval(email.toLowerCase());
+      return 0.55 + t * 0.45; // 0.55..1.00
+    }
+    return 1;
+  }, [scope, team]);
+  const scopedSeries = React.useMemo(() => scaleInsightsSeries(series, scopeFactor), [series, scopeFactor]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -58,36 +118,19 @@ export default function InsightsPage() {
     };
   }, [token]);
 
-  const quarters = React.useMemo(() => {
-    const make = (values12: number[]) => {
-      const q = [0, 0, 0, 0];
-      for (let i = 0; i < 12; i++) q[periodToQuarter(i)] += values12[i] ?? 0;
-      return q;
-    };
-
-    return {
-      budgetSalesQ: make(mock.sales.budget),
-      actualSalesQ: make(mock.sales.actual),
-      budgetVolQ: make(mock.volume.budget),
-      actualVolQ: make(mock.volume.actual),
-      budgetSpendQ: make(mock.spend.budget),
-      actualSpendQ: make(mock.spend.actual),
-    };
-  }, [mock]);
-
   const cards = React.useMemo(() => {
-    const salesBud = sum(mock.sales.budget);
-    const salesAct = sum(mock.sales.actual);
-    const volBud = sum(mock.volume.budget);
-    const volAct = sum(mock.volume.actual);
-    const spendBud = sum(mock.spend.budget);
-    const spendAct = sum(mock.spend.actual);
+    const salesBud = scopedSeries.annual.sales.budget;
+    const salesAct = scopedSeries.annual.sales.cyTotal;
+    const volBud = scopedSeries.annual.volume.budget;
+    const volAct = scopedSeries.annual.volume.cyTotal;
+    const spendBud = scopedSeries.annual.spend.budget;
+    const spendAct = scopedSeries.annual.spend.cyTotal;
     return [
       { title: "Retail Sales", bud: salesBud, act: salesAct, style: "currency" as const },
       { title: "Volume (Cases)", bud: volBud, act: volAct, style: "number" as const },
       { title: "Trade Spend", bud: spendBud, act: spendAct, style: "currency" as const },
     ];
-  }, [mock]);
+  }, [scopedSeries]);
 
   return (
     <div className="space-y-3">
@@ -123,6 +166,14 @@ export default function InsightsPage() {
           </div>
         </div>
       </div>
+
+      <TeamScopeCard
+        token={token}
+        team={team}
+        teamError={teamError}
+        scope={scope}
+        onScopeChange={setScope}
+      />
 
       <FiltersBar value={filters} onChange={setFilters} />
 
@@ -193,10 +244,30 @@ export default function InsightsPage() {
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
-            <CompareTile title="FY Sales vs Budget" a={series.annual.sales.cyTotal} b={series.annual.sales.budget} style="currency" />
-            <CompareTile title="FY Sales vs LY" a={series.annual.sales.cyTotal} b={series.annual.sales.lastYear} style="currency" />
-            <CompareTile title="YTD Volume vs LY" a={series.ytd.volume.cyActual} b={series.ytd.volume.lastYearYtd} style="number" />
-            <CompareTile title="FY Spend vs Budget" a={series.annual.spend.cyTotal} b={series.annual.spend.budget} style="currency" />
+            <CompareTile
+              title="FY Sales vs Budget"
+              a={scopedSeries.annual.sales.cyTotal}
+              b={scopedSeries.annual.sales.budget}
+              style="currency"
+            />
+            <CompareTile
+              title="FY Sales vs LY"
+              a={scopedSeries.annual.sales.cyTotal}
+              b={scopedSeries.annual.sales.lastYear}
+              style="currency"
+            />
+            <CompareTile
+              title="YTD Volume vs LY"
+              a={scopedSeries.ytd.volume.cyActual}
+              b={scopedSeries.ytd.volume.lastYearYtd}
+              style="number"
+            />
+            <CompareTile
+              title="FY Spend vs Budget"
+              a={scopedSeries.annual.spend.cyTotal}
+              b={scopedSeries.annual.spend.budget}
+              style="currency"
+            />
           </div>
         </div>
       ) : (
@@ -204,10 +275,10 @@ export default function InsightsPage() {
           <TrendPanel
             title="Retail Sales"
             subtitle="CY total vs LY (solid→dashed after cutoff)"
-            labels={series.view[view].labels}
-            cyActual={series.view[view].sales.cyActual}
-            cyForecast={series.view[view].sales.cyForecast}
-            lastYear={series.view[view].sales.lastYear}
+            labels={scopedSeries.view[view].labels}
+            cyActual={scopedSeries.view[view].sales.cyActual}
+            cyForecast={scopedSeries.view[view].sales.cyForecast}
+            lastYear={scopedSeries.view[view].sales.lastYear}
             cutoffBucketIndex={view === "period" ? series.cutoff.periodIndex : series.cutoff.quarterIndex}
             unit="currency"
             cumulative={pacing === "cumulative"}
@@ -215,10 +286,10 @@ export default function InsightsPage() {
           <TrendPanel
             title="Volume (Cases)"
             subtitle="CY total vs LY (solid→dashed after cutoff)"
-            labels={series.view[view].labels}
-            cyActual={series.view[view].volume.cyActual}
-            cyForecast={series.view[view].volume.cyForecast}
-            lastYear={series.view[view].volume.lastYear}
+            labels={scopedSeries.view[view].labels}
+            cyActual={scopedSeries.view[view].volume.cyActual}
+            cyForecast={scopedSeries.view[view].volume.cyForecast}
+            lastYear={scopedSeries.view[view].volume.lastYear}
             cutoffBucketIndex={view === "period" ? series.cutoff.periodIndex : series.cutoff.quarterIndex}
             unit="number"
             cumulative={pacing === "cumulative"}
@@ -226,10 +297,10 @@ export default function InsightsPage() {
           <TrendPanel
             title="Trade Spend"
             subtitle="CY total vs LY (solid→dashed after cutoff)"
-            labels={series.view[view].labels}
-            cyActual={series.view[view].spend.cyActual}
-            cyForecast={series.view[view].spend.cyForecast}
-            lastYear={series.view[view].spend.lastYear}
+            labels={scopedSeries.view[view].labels}
+            cyActual={scopedSeries.view[view].spend.cyActual}
+            cyForecast={scopedSeries.view[view].spend.cyForecast}
+            lastYear={scopedSeries.view[view].spend.lastYear}
             cutoffBucketIndex={view === "period" ? series.cutoff.periodIndex : series.cutoff.quarterIndex}
             unit="currency"
             cumulative={pacing === "cumulative"}
@@ -242,114 +313,44 @@ export default function InsightsPage() {
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
-              <CompareTile title="FY Sales vs Budget" a={series.annual.sales.cyTotal} b={series.annual.sales.budget} style="currency" />
-              <CompareTile title="FY Sales vs LY" a={series.annual.sales.cyTotal} b={series.annual.sales.lastYear} style="currency" />
-              <CompareTile title="YTD Volume vs LY" a={series.ytd.volume.cyActual} b={series.ytd.volume.lastYearYtd} style="number" />
-              <CompareTile title="FY Spend vs Budget" a={series.annual.spend.cyTotal} b={series.annual.spend.budget} style="currency" />
+              <CompareTile
+                title="FY Sales vs Budget"
+                a={scopedSeries.annual.sales.cyTotal}
+                b={scopedSeries.annual.sales.budget}
+                style="currency"
+              />
+              <CompareTile
+                title="FY Sales vs LY"
+                a={scopedSeries.annual.sales.cyTotal}
+                b={scopedSeries.annual.sales.lastYear}
+                style="currency"
+              />
+              <CompareTile
+                title="YTD Volume vs LY"
+                a={scopedSeries.ytd.volume.cyActual}
+                b={scopedSeries.ytd.volume.lastYearYtd}
+                style="number"
+              />
+              <CompareTile
+                title="FY Spend vs Budget"
+                a={scopedSeries.annual.spend.cyTotal}
+                b={scopedSeries.annual.spend.budget}
+                style="currency"
+              />
             </div>
           </div>
         </div>
       )}
 
-      <div className="rounded-xl border bg-white shadow-sm">
-        <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
-          <div>
-            <div className="text-sm font-semibold tracking-tight">My Team</div>
-            <div className="text-xs text-muted-foreground">
-              Driven by the admin hierarchy mapping in <Link className="text-primary hover:underline" href="/admin/org">Admin → Team Hierarchy</Link>.
-            </div>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            Managers see team totals + can drill down
-          </div>
-        </div>
-        <div className="px-4 py-3">
-          {!token ? (
-            <div className="text-sm text-muted-foreground">Sign in to load your team.</div>
-          ) : teamError ? (
-            <div className="text-sm text-red-600">{teamError}</div>
-          ) : !team ? (
-            <div className="text-sm text-muted-foreground">Loading team…</div>
-          ) : team.reports.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              No direct reports are mapped for <span className="font-medium">{team.managerEmail}</span>. Add mappings in{" "}
-              <Link className="text-primary hover:underline" href="/admin/org">
-                Admin → Team Hierarchy
-              </Link>
-              .
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {team.reports.map((r) => (
-                <div key={r.id} className="rounded-lg border bg-white px-3 py-2">
-                  <div className="text-xs font-medium">{r.email}</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    Drilldown (next): see this person’s totals and quarter rollups.
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="rounded-xl border bg-white shadow-sm">
-        <div className="border-b px-4 py-3">
-          <div className="text-sm font-semibold tracking-tight">Quarter Rollup</div>
-          <div className="text-xs text-muted-foreground">
-            FYI: the new charts above already support Period/Quarter/Annual. This table stays as a simple, auditable rollup view.
-          </div>
-        </div>
-
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs text-muted-foreground">Metric</th>
-                {["Q1", "Q2", "Q3", "Q4"].map((q) => (
-                  <th key={q} className="px-4 py-2 text-right text-xs text-muted-foreground">
-                    {q}
-                  </th>
-                ))}
-                <th className="px-4 py-2 text-right text-xs text-muted-foreground">Year</th>
-              </tr>
-            </thead>
-            <tbody>
-              <QuarterRow label="Sales (Budget)" values={quarters.budgetSalesQ} style="currency" />
-              <QuarterRow label="Sales (Actuals)" values={quarters.actualSalesQ} style="currency" />
-              <QuarterRow label="Volume (Budget)" values={quarters.budgetVolQ} style="number" />
-              <QuarterRow label="Volume (Actuals)" values={quarters.actualVolQ} style="number" />
-              <QuarterRow label="Trade Spend (Budget)" values={quarters.budgetSpendQ} style="currency" />
-              <QuarterRow label="Trade Spend (Actuals)" values={quarters.actualSpendQ} style="currency" />
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <RollupTable
+        view={view}
+        pacing={pacing}
+        labels={scopedSeries.view[view].labels}
+        sales={scopedSeries.view[view].sales}
+        volume={scopedSeries.view[view].volume}
+        spend={scopedSeries.view[view].spend}
+      />
     </div>
-  );
-}
-
-function QuarterRow({
-  label,
-  values,
-  style,
-}: {
-  label: string;
-  values: number[];
-  style: "currency" | "number";
-}) {
-  return (
-    <tr className="border-t">
-      <td className="px-4 py-2 text-xs font-medium">{label}</td>
-      {values.map((v, idx) => (
-        <td key={idx} className="px-4 py-2 text-right text-xs tabular-nums">
-          {formatNumber(v, { style })}
-        </td>
-      ))}
-      <td className="px-4 py-2 text-right text-xs font-semibold tabular-nums">
-        {formatNumber(sum(values), { style })}
-      </td>
-    </tr>
   );
 }
 
@@ -427,5 +428,239 @@ function CompareTile({
         vs {formatNumber(b, { style })}
       </div>
     </div>
+  );
+}
+
+function TeamScopeCard({
+  token,
+  team,
+  teamError,
+  scope,
+  onScopeChange,
+}: {
+  token: string | null;
+  team: { managerEmail: string; reports: { id: string; email: string }[] } | null;
+  teamError: string | null;
+  scope: string;
+  onScopeChange: (next: string) => void;
+}) {
+  const options = React.useMemo(() => {
+    const opts: Array<{ value: string; label: string }> = [{ value: "me", label: "Me" }];
+    if (team && team.reports.length > 0) {
+      opts.push({ value: "team", label: "My Team (rollup)" });
+      for (const r of team.reports) opts.push({ value: `report:${r.id}`, label: r.email });
+    }
+    return opts;
+  }, [team]);
+
+  React.useEffect(() => {
+    // Ensure selected scope remains valid as team loads/changes
+    const ok = options.some((o) => o.value === scope);
+    if (!ok) onScopeChange("me");
+  }, [options, scope, onScopeChange]);
+
+  return (
+    <div className="rounded-xl border bg-white/80 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold tracking-tight">Team scope</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            Driven by <Link className="text-primary hover:underline" href="/admin/org">Admin → Team Hierarchy</Link>.{" "}
+            <span className="hidden md:inline">Charts + tables respond to this selection.</span>
+          </div>
+        </div>
+        <div className="min-w-[260px]">
+          <div className="mb-1 text-[11px] font-medium text-muted-foreground">Scope</div>
+          <Select value={scope} onValueChange={onScopeChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select scope" />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="mt-2 text-xs text-muted-foreground">
+        {!token ? (
+          <>Sign in to load your team mapping.</>
+        ) : teamError ? (
+          <span className="text-red-600">{teamError}</span>
+        ) : !team ? (
+          <>Loading team…</>
+        ) : team.reports.length === 0 ? (
+          <>
+            No direct reports mapped for <span className="font-medium text-foreground">{team.managerEmail}</span>.
+          </>
+        ) : (
+          <>
+            Manager: <span className="font-medium text-foreground">{team.managerEmail}</span> • Direct reports:{" "}
+            <span className="font-medium text-foreground">{team.reports.length}</span>
+            <span className="ml-2 text-[11px] text-muted-foreground">
+              (Mock scope scaling until DB rollups land)
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function prefixSum(arr: number[]) {
+  const out = new Array<number>(arr.length);
+  let acc = 0;
+  for (let i = 0; i < arr.length; i++) {
+    acc += arr[i] ?? 0;
+    out[i] = acc;
+  }
+  return out;
+}
+
+function RollupTable({
+  view,
+  pacing,
+  labels,
+  sales,
+  volume,
+  spend,
+}: {
+  view: InsightsViewKey;
+  pacing: "bucket" | "cumulative";
+  labels: string[];
+  sales: { cyActual: number[]; cyForecast: number[]; budget: number[]; lastYear: number[] };
+  volume: { cyActual: number[]; cyForecast: number[]; budget: number[]; lastYear: number[] };
+  spend: { cyActual: number[]; cyForecast: number[]; budget: number[]; lastYear: number[] };
+}) {
+  const cumulative = view === "annual" ? false : pacing === "cumulative";
+  const showTotal = view !== "annual";
+
+  const normalize = (arr: number[]) => {
+    const out = Array.from({ length: labels.length }, (_, i) => arr[i] ?? 0);
+    return cumulative ? prefixSum(out) : out;
+  };
+
+  const rowFor = (m: { cyActual: number[]; cyForecast: number[]; budget: number[]; lastYear: number[] }) => {
+    const cy = normalize(m.cyActual).map((v, i) => v + (normalize(m.cyForecast)[i] ?? 0));
+    const ly = normalize(m.lastYear);
+    const bud = normalize(m.budget);
+    const total = (xs: number[]) => (xs.length ? (cumulative ? xs[xs.length - 1] ?? 0 : sum(xs)) : 0);
+    return {
+      cy,
+      ly,
+      bud,
+      totals: { cy: total(cy), ly: total(ly), bud: total(bud) },
+    };
+  };
+
+  const salesR = rowFor(sales);
+  const volR = rowFor(volume);
+  const spendR = rowFor(spend);
+
+  return (
+    <div className="rounded-xl border bg-white shadow-sm">
+      <div className="border-b px-4 py-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <div className="text-sm font-semibold tracking-tight">Rollup table</div>
+            <div className="text-xs text-muted-foreground">
+              Follows your view selection (Period/Quarter/Annual). CY is shown as a single row (Actuals+Forecast).
+            </div>
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Mode: {view === "period" ? "Period" : view === "quarter" ? "Quarter" : "Annual"} •{" "}
+            {cumulative ? "Cumulative" : "Bucket"}
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs text-muted-foreground">Metric</th>
+              {labels.map((l) => (
+                <th key={l} className="px-4 py-2 text-right text-xs text-muted-foreground">
+                  {l}
+                </th>
+              ))}
+              {showTotal ? (
+                <th className="px-4 py-2 text-right text-xs text-muted-foreground">Total</th>
+              ) : null}
+            </tr>
+          </thead>
+          <tbody>
+            <RollupGroup label="Retail Sales" style="currency" rows={salesR} showTotal={showTotal} />
+            <RollupGroup label="Volume (Cases)" style="number" rows={volR} showTotal={showTotal} />
+            <RollupGroup label="Trade Spend" style="currency" rows={spendR} showTotal={showTotal} />
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RollupGroup({
+  label,
+  style,
+  rows,
+  showTotal,
+}: {
+  label: string;
+  style: "currency" | "number";
+  rows: {
+    cy: number[];
+    ly: number[];
+    bud: number[];
+    totals: { cy: number; ly: number; bud: number };
+  };
+  showTotal: boolean;
+}) {
+  return (
+    <>
+      <tr className="border-t">
+        <td className="px-4 py-2 text-xs font-semibold">{label}</td>
+        <td className="px-4 py-2 text-right text-xs text-muted-foreground" colSpan={rows.cy.length + (showTotal ? 1 : 0)}>
+          CY (Actuals+Forecast) vs LY vs Budget
+        </td>
+      </tr>
+      <RollupRow label="CY" values={rows.cy} total={rows.totals.cy} style={style} showTotal={showTotal} />
+      <RollupRow label="LY" values={rows.ly} total={rows.totals.ly} style={style} showTotal={showTotal} />
+      <RollupRow label="Budget" values={rows.bud} total={rows.totals.bud} style={style} showTotal={showTotal} />
+    </>
+  );
+}
+
+function RollupRow({
+  label,
+  values,
+  total,
+  style,
+  showTotal,
+}: {
+  label: string;
+  values: number[];
+  total: number;
+  style: "currency" | "number";
+  showTotal: boolean;
+}) {
+  return (
+    <tr className="border-t">
+      <td className="px-4 py-2 text-xs font-medium text-muted-foreground">{label}</td>
+      {values.map((v, idx) => (
+        <td key={idx} className="px-4 py-2 text-right text-xs tabular-nums">
+          {formatNumber(v, { style })}
+        </td>
+      ))}
+      {showTotal ? (
+        <td className="px-4 py-2 text-right text-xs font-semibold tabular-nums">
+          {formatNumber(total, { style })}
+        </td>
+      ) : null}
+    </tr>
   );
 }

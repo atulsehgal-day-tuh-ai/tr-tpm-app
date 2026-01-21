@@ -126,7 +126,14 @@ export function BucketTrendLines({
 
         {/* CY dashed (forecast segment) */}
         {dCyDashed ? (
-          <path d={dCyDashed} fill="none" stroke="rgb(2 132 199)" strokeWidth="3" strokeDasharray="6 5" opacity="0.95" />
+          <path
+            d={dCyDashed}
+            fill="none"
+            stroke="rgb(16 185 129)" /* emerald-500 */
+            strokeWidth="3"
+            strokeDasharray="6 5"
+            opacity="0.95"
+          />
         ) : null}
 
         <title>
