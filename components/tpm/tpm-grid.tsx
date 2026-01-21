@@ -310,25 +310,25 @@ export function TpmGrid({
     const periodCols: ColumnDef<RowT>[] = periods.map((p, idx) => ({
       id: p.key,
       header: () => (
-        <TooltipProvider delayDuration={150}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="cursor-help text-center leading-tight">
-                <div className="text-[11px] font-semibold">{p.key}</div>
-                <div className="text-[10px] text-muted-foreground">
-                  {p.monthShort} • {p.weeks}w
-                </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="cursor-help text-center leading-tight">
+              <div className="text-[11px] font-semibold">{p.key}</div>
+              <div className="text-[10px] text-muted-foreground">
+                {p.monthShort} • {p.weeks}w
               </div>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="center">
-              <div className="font-medium">{p.key} ({p.monthShort})</div>
-              <div className="mt-0.5 text-muted-foreground">
-                {formatIsoWeekRange(p.isoWeekStart, p.isoWeekEnd)}
-              </div>
-              <div className="mt-1">{formatDateRange(p.startDate, p.endDate)}</div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center">
+            <div className="font-medium">
+              {p.key} ({p.monthShort})
+            </div>
+            <div className="mt-0.5 text-muted-foreground">
+              {formatIsoWeekRange(p.isoWeekStart, p.isoWeekEnd)}
+            </div>
+            <div className="mt-1">{formatDateRange(p.startDate, p.endDate)}</div>
+          </TooltipContent>
+        </Tooltip>
       ),
       cell: ({ row }) => {
         const r = row.original;
@@ -421,7 +421,8 @@ export function TpmGrid({
   });
 
   return (
-    <div className="rounded-xl border bg-white shadow-sm">
+    <TooltipProvider delayDuration={150}>
+      <div className="rounded-xl border bg-white shadow-sm">
       <div className="relative overflow-hidden border-b px-4 py-2.5">
         <div className="absolute inset-0 bg-gradient-to-r from-primary/15 via-white to-emerald-50" />
         <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-sky-400 to-emerald-400" />
@@ -539,7 +540,8 @@ export function TpmGrid({
       <div className="border-t bg-white/70 px-4 py-2 text-[11px] text-muted-foreground">
         Assumptions: Base price ${BASE_PRICE}, promo price ${PROMO_PRICE}. Difference uses Actuals for periods before the current month; otherwise Forecast.
       </div>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 
