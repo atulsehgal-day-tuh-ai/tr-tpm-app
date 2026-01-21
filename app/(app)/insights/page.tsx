@@ -66,8 +66,8 @@ export default function InsightsPage() {
   // Insights dashboard
   const { token } = useIdToken();
   const [filters, setFilters] = React.useState<Filters>({
-    retailer: "Publix",
-    division: "Atlanta Division",
+    retailerDivision: "Publix — Atlanta Division",
+    ppg: "__ALL__",
     year: 2026,
   });
   const [view, setView] = React.useState<InsightsViewKey>("period");
@@ -175,7 +175,7 @@ export default function InsightsPage() {
         onScopeChange={setScope}
       />
 
-      <FiltersBar value={filters} onChange={setFilters} />
+      <FiltersBar value={filters} onChange={setFilters} token={token} allowAllPpg />
 
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">

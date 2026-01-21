@@ -41,19 +41,27 @@ function isoDateTimeShort(d: string | Date) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(dt);
 }
 
+function parseRetailerDivision(retailerDivision: string) {
+  const parts = retailerDivision.split("—").map((s) => s.trim());
+  if (parts.length >= 2) return { retailer: parts[0], division: parts.slice(1).join(" — ") };
+  return { retailer: retailerDivision.trim(), division: "" };
+}
+
 export function TpmPlanner() {
   const { token } = useIdToken();
   const [filters, setFilters] = React.useState<Filters>({
-    retailer: "Publix",
-    division: "Atlanta Division",
+    retailerDivision: "Publix — Atlanta Division",
+    ppg: "Talking Rain Company Total",
     year: 2026,
   });
+
+  const parsed = React.useMemo(() => parseRetailerDivision(filters.retailerDivision), [filters.retailerDivision]);
 
   // MVP data source (mock) — will be replaced by DB-backed rollups later.
   const mock = React.useMemo(() => {
     const base = createPublix2026Mock();
-    return { ...base, division: filters.division };
-  }, [filters.division]);
+    return { ...base, division: parsed.division || base.division };
+  }, [parsed.division]);
 
   const [forecastPromo, setForecastPromo] = React.useState<Record<PromoType, number[]>>(() => ({
     Frontline: clamp12(mock.volume.forecastPromo.Frontline),
@@ -81,7 +89,7 @@ export function TpmPlanner() {
     setDraftSavedAt(null);
     setSubmittedAt(null);
     setSaveError(null);
-  }, [filters.retailer, filters.division, filters.year, mock.volume.forecastPromo]);
+  }, [filters.retailerDivision, filters.ppg, filters.year, mock.volume.forecastPromo]);
 
   // Load latest draft/submitted when filters change (and user is authed).
   React.useEffect(() => {
@@ -91,8 +99,9 @@ export function TpmPlanner() {
       if (!token) return;
       try {
         const qs = new URLSearchParams({
-          retailer: filters.retailer,
-          division: filters.division,
+          retailer: parsed.retailer,
+          division: parsed.division,
+          ppg: filters.ppg,
           year: String(filters.year),
         });
         const res = await fetch(`/api/forecast/latest?${qs.toString()}`, {
@@ -125,7 +134,7 @@ export function TpmPlanner() {
     return () => {
       cancelled = true;
     };
-  }, [token, filters.retailer, filters.division, filters.year, mock.volume.forecastPromo]);
+  }, [token, parsed.retailer, parsed.division, filters.ppg, filters.year, mock.volume.forecastPromo]);
 
   const saveDraft = React.useCallback(async () => {
     if (!token) {
@@ -142,8 +151,9 @@ export function TpmPlanner() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          retailer: filters.retailer,
-          division: filters.division,
+          retailer: parsed.retailer,
+          division: parsed.division,
+          ppg: filters.ppg,
           year: filters.year,
           data: { forecastPromo },
         }),
@@ -159,7 +169,7 @@ export function TpmPlanner() {
     } finally {
       setSaving(false);
     }
-  }, [token, filters.retailer, filters.division, filters.year, forecastPromo]);
+  }, [token, parsed.retailer, parsed.division, filters.ppg, filters.year, forecastPromo]);
 
   const submit = React.useCallback(async () => {
     if (!token) {
@@ -181,8 +191,9 @@ export function TpmPlanner() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          retailer: filters.retailer,
-          division: filters.division,
+          retailer: parsed.retailer,
+          division: parsed.division,
+          ppg: filters.ppg,
           year: filters.year,
         }),
       });
@@ -194,11 +205,11 @@ export function TpmPlanner() {
     } finally {
       setSubmitting(false);
     }
-  }, [token, filters.retailer, filters.division, filters.year, isDirty, saveDraft]);
+  }, [token, parsed.retailer, parsed.division, filters.ppg, filters.year, isDirty, saveDraft]);
 
   return (
     <div className="space-y-3">
-      <FiltersBar value={filters} onChange={setFilters} />
+      <FiltersBar value={filters} onChange={setFilters} token={token} requirePpg />
 
       <div className="rounded-xl border bg-white/80 px-3 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -239,8 +250,8 @@ export function TpmPlanner() {
         </div>
       </div>
 
-      <GridKpis filters={filters} mock={mock} forecastPromo={forecastPromo} />
-      <TpmGrid filters={filters} forecastPromo={forecastPromo} setForecastPromo={setForecastPromo} />
+      <GridKpis filters={{ retailer: parsed.retailer, division: parsed.division, year: filters.year }} mock={mock} forecastPromo={forecastPromo} />
+      <TpmGrid filters={{ retailer: parsed.retailer, division: parsed.division, year: filters.year }} forecastPromo={forecastPromo} setForecastPromo={setForecastPromo} />
     </div>
   );
 }
