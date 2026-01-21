@@ -35,7 +35,7 @@ export default function LoginPage() {
                 if (auth.status === "ready" && !isAuthed) {
                   await instance.loginPopup(loginRequest);
                 }
-                window.location.href = "/";
+                window.location.href = "/home";
               }}
             >
               {isAuthed ? "Continue" : "Sign in"}
