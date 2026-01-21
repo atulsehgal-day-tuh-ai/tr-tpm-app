@@ -6,6 +6,10 @@ import { createPublix2026Mock } from "@/lib/tpm/mockPublix2026";
 import { formatNumber, sum } from "@/lib/tpm/fiscal";
 import { useIdToken } from "@/components/auth/use-id-token";
 import Link from "next/link";
+import { SegmentedControl } from "@/components/insights/segmented-control";
+import { GroupedStackedBars } from "@/components/insights/grouped-stacked-bars";
+import { TrendLines } from "@/components/insights/trend-lines";
+import { buildMockInsightsSeries, type InsightsViewKey } from "@/lib/tpm/insights-series";
 
 function periodToQuarter(periodIndex0: number) {
   // P1-P3 => Q1, P4-P6 => Q2, P7-P9 => Q3, P10-P12 => Q4
@@ -13,12 +17,14 @@ function periodToQuarter(periodIndex0: number) {
 }
 
 export default function InsightsPage() {
+  // Insights dashboard
   const { token } = useIdToken();
   const [filters, setFilters] = React.useState<Filters>({
     retailer: "Publix",
     division: "Atlanta Division",
     year: 2026,
   });
+  const [view, setView] = React.useState<InsightsViewKey>("quarter");
 
   const [team, setTeam] = React.useState<{ managerEmail: string; reports: { id: string; email: string }[] } | null>(
     null
@@ -27,6 +33,7 @@ export default function InsightsPage() {
 
   // MVP: use existing mock series (until DB-backed rollups land).
   const mock = React.useMemo(() => createPublix2026Mock(), []);
+  const series = React.useMemo(() => buildMockInsightsSeries({ mock, year: filters.year }), [mock, filters.year]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -89,16 +96,59 @@ export default function InsightsPage() {
           <div>
             <div className="text-lg font-semibold tracking-tight">Insights</div>
             <div className="text-sm text-muted-foreground">
-              Periods roll up into quarters (P1–P3 = Q1, etc.). Managers will see team totals here.
+              Track performance with <span className="font-medium text-foreground">actuals through last completed week</span>, then{" "}
+              <span className="font-medium text-foreground">forecast through year-end</span>. Switch views to see Period, Quarter, or Annual rollups.
             </div>
           </div>
-          <div className="text-xs text-muted-foreground">
-            Sparkling view: quick rollups + clean drilldown
-          </div>
+          <SegmentedControl
+            value={view}
+            onChange={setView}
+            items={[
+              { key: "period", label: "Period" },
+              { key: "quarter", label: "Quarter" },
+              { key: "annual", label: "Annual" },
+            ]}
+          />
         </div>
       </div>
 
       <FiltersBar value={filters} onChange={setFilters} />
+
+      <div className="rounded-xl border bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold tracking-tight">Performance tracking window</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {series.cutoff.weekEndDate ? (
+                <>
+                  Actuals through <span className="font-medium text-foreground">{series.cutoff.weekEndDate}</span> • Forecast from{" "}
+                  <span className="font-medium text-foreground">{series.cutoff.nextWeekEndDate ?? "next week"}</span> to year-end
+                </>
+              ) : (
+                <>No actuals window for this year (future year) — forecast only.</>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-sky-500" />
+              Actuals
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+              Forecast
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-slate-400" />
+              Budget
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-violet-500" />
+              Last year
+            </span>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {cards.map((c) => (
@@ -120,6 +170,82 @@ export default function InsightsPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <InsightsPanel
+          title="Retail Sales"
+          subtitle="CY (Actuals+Forecast) vs Budget vs LY"
+          view={view}
+          buckets={series.view[view].labels}
+          actual={series.view[view].sales.cyActual}
+          forecast={series.view[view].sales.cyForecast}
+          budget={series.view[view].sales.budget}
+          lastYear={series.view[view].sales.lastYear}
+          trend={view === "annual" ? series.weekly.sales : null}
+          cutoffIndex={series.cutoff.weekIndex}
+          unit="currency"
+        />
+        <InsightsPanel
+          title="Volume (Cases)"
+          subtitle="CY (Actuals+Forecast) vs Budget vs LY"
+          view={view}
+          buckets={series.view[view].labels}
+          actual={series.view[view].volume.cyActual}
+          forecast={series.view[view].volume.cyForecast}
+          budget={series.view[view].volume.budget}
+          lastYear={series.view[view].volume.lastYear}
+          trend={view === "annual" ? series.weekly.volume : null}
+          cutoffIndex={series.cutoff.weekIndex}
+          unit="number"
+        />
+        <InsightsPanel
+          title="Trade Spend"
+          subtitle="CY (Actuals+Forecast) vs Budget vs LY"
+          view={view}
+          buckets={series.view[view].labels}
+          actual={series.view[view].spend.cyActual}
+          forecast={series.view[view].spend.cyForecast}
+          budget={series.view[view].spend.budget}
+          lastYear={series.view[view].spend.lastYear}
+          trend={view === "annual" ? series.weekly.spend : null}
+          cutoffIndex={series.cutoff.weekIndex}
+          unit="currency"
+        />
+        <div className="rounded-xl border bg-white shadow-sm">
+          <div className="border-b px-4 py-3">
+            <div className="text-sm font-semibold tracking-tight">Quick Comparisons</div>
+            <div className="text-xs text-muted-foreground">
+              YTD uses actuals through last completed week; FY uses actuals+forecast through year-end.
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
+            <CompareTile
+              title="FY Sales vs Budget"
+              a={series.annual.sales.cyTotal}
+              b={series.annual.sales.budget}
+              style="currency"
+            />
+            <CompareTile
+              title="FY Sales vs LY"
+              a={series.annual.sales.cyTotal}
+              b={series.annual.sales.lastYear}
+              style="currency"
+            />
+            <CompareTile
+              title="YTD Volume vs LY"
+              a={series.ytd.volume.cyActual}
+              b={series.ytd.volume.lastYearYtd}
+              style="number"
+            />
+            <CompareTile
+              title="FY Spend vs Budget"
+              a={series.annual.spend.cyTotal}
+              b={series.annual.spend.budget}
+              style="currency"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-white shadow-sm">
@@ -168,7 +294,7 @@ export default function InsightsPage() {
         <div className="border-b px-4 py-3">
           <div className="text-sm font-semibold tracking-tight">Quarter Rollup</div>
           <div className="text-xs text-muted-foreground">
-            This will be driven by Postgres rollups + manager/team mappings (next).
+            FYI: the new charts above already support Period/Quarter/Annual. This table stays as a simple, auditable rollup view.
           </div>
         </div>
 
@@ -224,3 +350,99 @@ function QuarterRow({
   );
 }
 
+function InsightsPanel({
+  title,
+  subtitle,
+  view,
+  buckets,
+  actual,
+  forecast,
+  budget,
+  lastYear,
+  trend,
+  cutoffIndex,
+  unit,
+}: {
+  title: string;
+  subtitle: string;
+  view: InsightsViewKey;
+  buckets: string[];
+  actual: number[];
+  forecast: number[];
+  budget: number[];
+  lastYear: number[];
+  trend: { cyActual: number[]; cyForecast: number[]; lastYear: number[]; labels: string[] } | null;
+  cutoffIndex: number | null;
+  unit: "currency" | "number";
+}) {
+  return (
+    <div className="rounded-xl border bg-white shadow-sm">
+      <div className="border-b px-4 py-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <div className="text-sm font-semibold tracking-tight">{title}</div>
+            <div className="text-xs text-muted-foreground">{subtitle}</div>
+          </div>
+          <div className="text-[11px] text-muted-foreground">View: {view === "period" ? "Period" : view === "quarter" ? "Quarter" : "Annual"}</div>
+        </div>
+      </div>
+      <div className="p-4">
+        <GroupedStackedBars
+          labels={buckets}
+          cyActual={actual}
+          cyForecast={forecast}
+          budget={budget}
+          lastYear={lastYear}
+          unit={unit}
+        />
+        {trend ? (
+          <div className="mt-4 rounded-lg border bg-white p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div className="text-xs font-semibold tracking-tight">Time trend (weekly)</div>
+              <div className="text-[11px] text-muted-foreground">CY vs LY • cutoff marker shows last completed week</div>
+            </div>
+            <div className="mt-2">
+              <TrendLines
+                labels={trend.labels}
+                cyTotal={trend.cyActual.map((v, i) => v + (trend.cyForecast[i] ?? 0))}
+                ly={trend.lastYear}
+                cutoffIndex={cutoffIndex}
+                unit={unit}
+              />
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CompareTile({
+  title,
+  a,
+  b,
+  style,
+}: {
+  title: string;
+  a: number;
+  b: number;
+  style: "currency" | "number";
+}) {
+  const delta = a - b;
+  const pct = b === 0 ? null : delta / b;
+  const up = delta >= 0;
+  return (
+    <div className="rounded-lg border bg-white p-3">
+      <div className="text-[11px] font-medium text-muted-foreground">{title}</div>
+      <div className="mt-1 flex items-end justify-between gap-3">
+        <div className="text-base font-semibold tabular-nums">{formatNumber(a, { style })}</div>
+        <div className={`text-xs font-semibold tabular-nums ${up ? "text-emerald-600" : "text-rose-600"}`}>
+          {formatNumber(delta, { style })} {pct === null ? "" : `(${formatNumber(pct, { style: "percent" })})`}
+        </div>
+      </div>
+      <div className="mt-1 text-[11px] text-muted-foreground">
+        vs {formatNumber(b, { style })}
+      </div>
+    </div>
+  );
+}
