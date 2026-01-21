@@ -21,8 +21,9 @@ export default function LoginPage() {
         className="pointer-events-none absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: "url('/brand/tpm-hero.jpg')" }}
       />
-      {/* Overlay for readability */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/85 via-white/80 to-emerald-50/85" />
+      {/* Overlay for readability (dim bright images) */}
+      <div className="pointer-events-none absolute inset-0 bg-slate-950/35" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/75 via-white/70 to-emerald-50/80" />
 
       <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-10 md:flex-row md:items-center md:justify-between">
         <div className="relative max-w-xl">
