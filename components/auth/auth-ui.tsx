@@ -4,26 +4,17 @@ import * as React from "react";
 import { useMsal } from "@azure/msal-react";
 import { loginRequest } from "@/lib/authConfig";
 import { Button } from "@/components/ui/button";
-
-export function useIsAuthEnabled() {
-  // Providers banner sets MSAL only when configured; useMsal throws if no provider.
-  // So we detect by attempting to read context safely.
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useMsal();
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { useAuthRuntime } from "@/components/auth/auth-runtime";
 
 export function AuthButtons() {
-  const authEnabled = useIsAuthEnabled();
+  const auth = useAuthRuntime();
 
-  if (!authEnabled) {
+  if (auth.status !== "ready") {
     return (
       <div className="text-xs text-muted-foreground">
-        Auth disabled (missing Azure AD env vars)
+        {auth.status === "loading"
+          ? "Auth loading…"
+          : `Auth disabled${auth.message ? `: ${auth.message}` : ""}`}
       </div>
     );
   }
@@ -64,10 +55,10 @@ function AuthButtonsInner() {
 }
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
-  const authEnabled = useIsAuthEnabled();
+  const auth = useAuthRuntime();
 
   // If auth is disabled, allow everything (dev/test mode).
-  if (!authEnabled) return <>{children}</>;
+  if (auth.status !== "ready") return <>{children}</>;
 
   return <RequireAuthInner>{children}</RequireAuthInner>;
 }

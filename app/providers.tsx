@@ -4,6 +4,7 @@ import { MsalProvider } from '@azure/msal-react'
 import { PublicClientApplication } from '@azure/msal-browser'
 import { buildMsalConfig } from '@/lib/authConfig'
 import { useEffect, useMemo, useState } from 'react'
+import { AuthRuntimeProvider } from '@/components/auth/auth-runtime'
 
 type PublicConfig = {
   clientId: string
@@ -81,7 +82,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return (
       <>
         {banner}
-        <MsalProvider instance={msalInstance}>{children}</MsalProvider>
+        <AuthRuntimeProvider value={{ status: 'ready' }}>
+          <MsalProvider instance={msalInstance}>{children}</MsalProvider>
+        </AuthRuntimeProvider>
       </>
     )
   }
@@ -89,7 +92,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <>
       {banner}
-      {children}
+      <AuthRuntimeProvider value={{ status, message }}>{children}</AuthRuntimeProvider>
     </>
   )
 }

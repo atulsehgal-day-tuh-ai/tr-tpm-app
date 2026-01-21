@@ -5,8 +5,10 @@ import { useMsal } from "@azure/msal-react";
 import { loginRequest } from "@/lib/authConfig";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuthRuntime } from "@/components/auth/auth-runtime";
 
 export default function LoginPage() {
+  const auth = useAuthRuntime();
   const { instance, accounts } = useMsal();
 
   const isAuthed = (accounts?.length ?? 0) > 0;
@@ -31,10 +33,12 @@ export default function LoginPage() {
             <Button
               className={cn("min-w-[160px]")}
               onClick={async () => {
+                if (auth.status !== "ready") return;
                 if (isAuthed) return;
                 await instance.loginPopup(loginRequest);
                 window.location.href = "/grid";
               }}
+              disabled={auth.status !== "ready"}
             >
               {isAuthed ? "Continue" : "Sign in with Azure AD"}
             </Button>
