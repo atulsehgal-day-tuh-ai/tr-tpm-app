@@ -17,7 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Link href="/grid" className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500" />
                 <span className="text-base font-semibold tracking-tight">
-                  Talking Rain TPM
+                  Talking Rain Leading Indicators
                 </span>
               </Link>
               <nav className="hidden items-center gap-1 md:flex">

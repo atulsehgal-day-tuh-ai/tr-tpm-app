@@ -4,7 +4,7 @@
 You are a Senior Full-Stack Engineer and Data Architect building a Trade Promotion Management (TPM) web application.
 
 ## Objective:
-Build a web-based "Retailer KPI Forecast Model" (Leading Indicator Tool) to replace a fragile Excel workflow. The goal is to allow Key Account Managers (KAMs) to forecast sales volumes and view financial KPIs without "breaking" the underlying formulas.
+Build a web-based "Retailer KPI Forecast Model" (Leading Indicators Tool) to replace a fragile Excel workflow. The goal is to allow Key Account Managers (KAMs) to forecast sales volumes and view financial KPIs without "breaking" the underlying formulas.
 
 ---
 
@@ -60,7 +60,7 @@ We are ingesting data from **Anaplan** (Budget/Promotions) and **Circana** (Actu
 
 ## 3. Business Logic & Calculation Rules
 
-### The "Leading Indicator" Logic:
+### The "Leading Indicators" Logic:
 We need to calculate future volume. The user (KAM) provides a volume forecast.
 
 **Calculation**:

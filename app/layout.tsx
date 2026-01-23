@@ -6,8 +6,8 @@ import { Providers } from './providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'TR TPM Test App',
-  description: 'Test application for Talking Rain TPM system',
+  title: 'Talking Rain Leading Indicators',
+  description: 'Leading Indicators application for Talking Rain',
 }
 
 export default function RootLayout({

@@ -47,7 +47,7 @@ export default function LandingPage() {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border bg-white/75 px-5 py-4 shadow-sm backdrop-blur">
-        <div className="text-3xl font-semibold tracking-tight">Trade Promotion Management</div>
+        <div className="text-3xl font-semibold tracking-tight">Leading Indicators</div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

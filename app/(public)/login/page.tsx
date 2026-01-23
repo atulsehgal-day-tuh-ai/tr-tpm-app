@@ -26,7 +26,7 @@ export default function LoginPage() {
       <div className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-4 py-10">
         <div className="relative w-full max-w-2xl text-center">
           <h1 className="text-5xl font-semibold tracking-tight md:text-6xl">
-            Trade Promotion Management Tool
+            Leading Indicators Tool
           </h1>
           <div className="mt-7 flex justify-center">
             <Button
