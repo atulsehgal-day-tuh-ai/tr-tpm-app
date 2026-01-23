@@ -9,6 +9,24 @@ A basic test application to verify the recommended tech stack for the Talking Ra
 - **Database**: PostgreSQL
 - **Authentication**: Azure AD (Entra ID) with MSAL
 
+## Security & performance guardrails
+
+This repo includes a few pragmatic protections to avoid common production issues:
+
+- **Postgres SSL verification (MITM protection)**:
+  - When SSL is required (Azure Postgres, `sslmode=require|verify-*`, or production mode), connections use TLS with **certificate verification enabled** by default.
+  - Optional break-glass for non-production only: set `PG_SSL_INSECURE=true` to allow insecure TLS (not allowed in `NODE_ENV=production`).
+
+- **Admin CSV uploads: request size limit**:
+  - Uploads are capped at **10 MB**. Larger files return HTTP **413**.
+
+- **Admin CSV uploads: batch inserts**:
+  - Circana actuals ingestion batches inserts into `actuals_weekly_fact` to avoid N+1 queries (rows × weeks).
+  - Negative volumes are rejected and recorded as `upload_error` rows (the upload continues).
+
+- **Error page stack traces**:
+  - `app/error.tsx` shows stack traces in dev, but **hides stacks in production**.
+
 ## Getting Started
 
 ### Prerequisites
