@@ -489,7 +489,7 @@ export function TpmGrid({
         <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-sky-400 to-emerald-400" />
         <div className="relative flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm font-semibold tracking-tight">
-          TPM Planner — {filters.retailer} • {filters.division} • {filters.year}
+          Leading Indicators — {filters.retailer} • {filters.division} • {filters.year}
         </div>
         <div className="text-xs text-muted-foreground">
           <span className="rounded-full bg-muted px-2 py-0.5">Budget/Actuals locked</span>{" "}
