@@ -9,6 +9,8 @@ A basic test application to verify the recommended tech stack for the Talking Ra
 - **Database**: PostgreSQL
 - **Authentication**: Azure AD (Entra ID) with MSAL
 
+For detailed architecture diagrams (system overview, data flow, component hierarchy, ER diagrams), see **[docs/architecture.md](docs/architecture.md)**.
+
 ## Security & performance guardrails
 
 This repo includes a few pragmatic protections to avoid common production issues:
