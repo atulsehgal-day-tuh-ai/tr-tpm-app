@@ -31,12 +31,17 @@ async function main() {
 
   const pool = new pg.Pool({
     connectionString: databaseUrl,
-    ssl:
-      databaseUrl.includes(".postgres.database.azure.com") ||
-      /[?&]sslmode=(require|verify-ca|verify-full)(?:&|$)/i.test(databaseUrl) ||
-      process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: false }
-        : false,
+    ssl: (() => {
+      const sslRequired =
+        databaseUrl.includes(".postgres.database.azure.com") ||
+        /[?&]sslmode=(require|verify-ca|verify-full)(?:&|$)/i.test(databaseUrl) ||
+        process.env.NODE_ENV === "production";
+
+      const allowInsecure =
+        process.env.PG_SSL_INSECURE === "true" && process.env.NODE_ENV !== "production";
+
+      return sslRequired ? { rejectUnauthorized: !allowInsecure } : false;
+    })(),
     max: 1,
   });
 

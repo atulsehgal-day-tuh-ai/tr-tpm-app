@@ -68,6 +68,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Missing file" }, { status: 400 });
   }
 
+  // 10MB max upload to prevent memory exhaustion on file.text()/CSV parse.
+  const MAX_BYTES = 10 * 1024 * 1024;
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json({ ok: false, error: "File too large (max 10 MB)." }, { status: 413 });
+  }
+
   const text = await file.text();
   const pool = getPool();
   const batchId = crypto.randomUUID();
@@ -129,6 +135,13 @@ export async function POST(req: NextRequest) {
 
       // Insert normalized weekly facts.
       const seenAccounts = new Set<string>();
+      const ids: string[] = [];
+      const batchIds: string[] = [];
+      const geographies: string[] = [];
+      const products: string[] = [];
+      const weekEnds: string[] = [];
+      const volumes: number[] = [];
+
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
         const geography = mustString(r[geographyIdx]);
@@ -148,15 +161,43 @@ export async function POST(req: NextRequest) {
           // Skip blanks
           if (vol == null) continue;
 
+          // Guardrail: negative volumes are invalid
+          if (vol < 0) {
+            await addError(i + 2, "Negative volume not allowed", {
+              geography,
+              product,
+              week_end_date: wc.weekEndIso,
+              volume: vol,
+            });
+            continue;
+          }
+
           rowCount++;
-          await pool.query(
-            `
-              INSERT INTO actuals_weekly_fact (id, batch_id, geography, product, week_end_date, volume)
-              VALUES ($1,$2,$3,$4,$5,$6)
-            `,
-            [crypto.randomUUID(), batchId, geography, product, wc.weekEndIso, vol]
-          );
+          ids.push(crypto.randomUUID());
+          batchIds.push(batchId);
+          geographies.push(geography);
+          products.push(product);
+          weekEnds.push(wc.weekEndIso);
+          volumes.push(vol);
         }
+      }
+
+      // Batch insert (avoids N+1 queries: rows × weekCols)
+      if (ids.length) {
+        await pool.query(
+          `
+            INSERT INTO actuals_weekly_fact (id, batch_id, geography, product, week_end_date, volume)
+            SELECT * FROM UNNEST(
+              $1::uuid[],
+              $2::uuid[],
+              $3::text[],
+              $4::text[],
+              $5::date[],
+              $6::numeric[]
+            )
+          `,
+          [ids, batchIds, geographies, products, weekEnds, volumes]
+        );
       }
     }
 

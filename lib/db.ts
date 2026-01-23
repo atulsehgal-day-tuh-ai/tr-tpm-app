@@ -26,10 +26,15 @@ export function getPool(): Pool {
     const isAzurePostgres = connectionString.includes('.postgres.database.azure.com');
     const requiresSslFromUrl =
       /[?&]sslmode=(require|verify-ca|verify-full)(?:&|$)/i.test(connectionString);
-    const sslConfig =
-      isSupabase || isAzurePostgres || requiresSslFromUrl || process.env.NODE_ENV === 'production'
-        ? { rejectUnauthorized: false }
-        : false;
+    const sslRequired =
+      isSupabase || isAzurePostgres || requiresSslFromUrl || process.env.NODE_ENV === "production";
+
+    // Secure by default: verify certificates.
+    // Break-glass option for dev/stage only if needed.
+    const allowInsecure =
+      process.env.PG_SSL_INSECURE === "true" && process.env.NODE_ENV !== "production";
+
+    const sslConfig = sslRequired ? { rejectUnauthorized: !allowInsecure } : false;
 
     pool = new Pool({
       connectionString,

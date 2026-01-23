@@ -34,9 +34,13 @@ export default function ErrorPage({
 
           <div className="mt-3 rounded-lg border bg-muted/20 p-3">
             <div className="text-xs font-medium text-muted-foreground">Stack</div>
-            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-xs">
-              {(error as any)?.stack || "(no stack)"}
-            </pre>
+            {process.env.NODE_ENV !== "production" ? (
+              <pre className="mt-2 overflow-auto whitespace-pre-wrap text-xs">
+                {(error as any)?.stack || "(no stack)"}
+              </pre>
+            ) : (
+              <div className="mt-2 text-xs text-muted-foreground">(hidden in production)</div>
+            )}
           </div>
 
           {error?.digest ? (
