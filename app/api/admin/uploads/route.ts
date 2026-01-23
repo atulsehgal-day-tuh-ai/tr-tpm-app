@@ -222,6 +222,27 @@ export async function POST(req: NextRequest) {
         throw new Error("Promotions CSV missing required columns (Deal ID, Call Point, Promo Status, PPG)");
       }
 
+      // Collect unique accounts for batch upsert
+      const seenAccounts = new Set<string>();
+      // Collect rows for batch insert
+      const promoIds: string[] = [];
+      const promoBatchIds: string[] = [];
+      const dealIds: (string | null)[] = [];
+      const promoStatuses: (string | null)[] = [];
+      const promoTypes: (string | null)[] = [];
+      const callPoints: (string | null)[] = [];
+      const ppgs: (string | null)[] = [];
+      const promoStarts: (string | null)[] = [];
+      const promoEnds: (string | null)[] = [];
+      const costStarts: (string | null)[] = [];
+      const costEnds: (string | null)[] = [];
+      const scanBacks: (number | null)[] = [];
+      const trShares: (number | null)[] = [];
+      const forecastVols: (number | null)[] = [];
+      const circanaGeos: (string | null)[] = [];
+      const rtms: (string | null)[] = [];
+      const rowJsons: object[] = [];
+
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
         const dealId = mustString(r[dealIdIdx]);
@@ -232,9 +253,9 @@ export async function POST(req: NextRequest) {
 
         if (!dealId && !callPoint && !ppg) continue;
 
-        // Call Point is the combined Retailer+Division "Account key" dimension.
-        if (callPoint) {
-          await upsertAccount(pool, callPoint);
+        // Track unique accounts for batch upsert
+        if (callPoint && !seenAccounts.has(callPoint)) {
+          seenAccounts.add(callPoint);
         }
 
         const costStart = costStartIdx >= 0 ? parseMdy(mustString(r[costStartIdx])) : null;
@@ -250,6 +271,32 @@ export async function POST(req: NextRequest) {
         const rtm = rtmIdx >= 0 ? mustString(r[rtmIdx]) : "";
 
         rowCount++;
+        promoIds.push(crypto.randomUUID());
+        promoBatchIds.push(batchId);
+        dealIds.push(dealId || null);
+        promoStatuses.push(promoStatus || null);
+        promoTypes.push(promoType || null);
+        callPoints.push(callPoint || null);
+        ppgs.push(ppg || null);
+        promoStarts.push(promoStart);
+        promoEnds.push(promoEnd);
+        costStarts.push(costStart);
+        costEnds.push(costEnd);
+        scanBacks.push(scanBack);
+        trShares.push(trShare);
+        forecastVols.push(forecastVol);
+        circanaGeos.push(circanaGeo || null);
+        rtms.push(rtm || null);
+        rowJsons.push(Object.fromEntries(header.map((h, j) => [h, r[j] ?? null])));
+      }
+
+      // Batch upsert accounts
+      for (const acct of Array.from(seenAccounts)) {
+        await upsertAccount(pool, acct);
+      }
+
+      // Batch insert promotions
+      if (promoIds.length) {
         await pool.query(
           `
             INSERT INTO promotions_raw (
@@ -257,31 +304,19 @@ export async function POST(req: NextRequest) {
               promo_start_date, promo_end_date, cost_start_date, cost_end_date,
               scan_back_per_cs, tr_share_of_discount, forecasted_volume,
               circana_geography, route_to_market, row_json
-            ) VALUES (
-              $1,$2,$3,$4,$5,$6,$7,
-              $8,$9,$10,$11,
-              $12,$13,$14,
-              $15,$16,$17
+            )
+            SELECT * FROM UNNEST(
+              $1::uuid[], $2::uuid[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[],
+              $8::date[], $9::date[], $10::date[], $11::date[],
+              $12::numeric[], $13::numeric[], $14::numeric[],
+              $15::text[], $16::text[], $17::jsonb[]
             )
           `,
           [
-            crypto.randomUUID(),
-            batchId,
-            dealId || null,
-            promoStatus || null,
-            promoType || null,
-            callPoint || null,
-            ppg || null,
-            promoStart,
-            promoEnd,
-            costStart,
-            costEnd,
-            scanBack,
-            trShare,
-            forecastVol,
-            circanaGeo || null,
-            rtm || null,
-            Object.fromEntries(header.map((h, j) => [h, r[j] ?? null])),
+            promoIds, promoBatchIds, dealIds, promoStatuses, promoTypes, callPoints, ppgs,
+            promoStarts, promoEnds, costStarts, costEnds,
+            scanBacks, trShares, forecastVols,
+            circanaGeos, rtms, rowJsons,
           ]
         );
       }
@@ -301,42 +336,70 @@ export async function POST(req: NextRequest) {
         throw new Error("Budget CSV missing required columns (Call Point, PPG - Item, Total Cases Budgeted)");
       }
 
+      // Collect unique accounts for batch upsert
+      const seenAccounts = new Set<string>();
+      // Collect rows for batch insert
+      const budgetIds: string[] = [];
+      const budgetBatchIds: string[] = [];
+      const budgetCallPoints: string[] = [];
+      const ppgItems: string[] = [];
+      const weeksTexts: (string | null)[] = [];
+      const weeklyVols: (number | null)[] = [];
+      const totalCases: (number | null)[] = [];
+      const trShareVals: (number | null)[] = [];
+      const scanBackVals: (number | null)[] = [];
+      const trNetRevenues: (number | null)[] = [];
+      const budgetRowJsons: object[] = [];
+
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
         const callPoint = mustString(r[callPointIdx]);
         const ppgItem = mustString(r[ppgIdx]);
         if (!callPoint || !ppgItem) continue;
 
-        // Call Point is the combined Retailer+Division "Account key" dimension.
-        if (callPoint) {
-          await upsertAccount(pool, callPoint);
+        // Track unique accounts for batch upsert
+        if (!seenAccounts.has(callPoint)) {
+          seenAccounts.add(callPoint);
         }
 
         rowCount++;
+        budgetIds.push(crypto.randomUUID());
+        budgetBatchIds.push(batchId);
+        budgetCallPoints.push(callPoint);
+        ppgItems.push(ppgItem);
+        weeksTexts.push(weeksIdx >= 0 ? mustString(r[weeksIdx]) || null : null);
+        weeklyVols.push(weeklyVolIdx >= 0 ? parseNumberLike(mustString(r[weeklyVolIdx])) : null);
+        totalCases.push(parseNumberLike(mustString(r[totalCasesIdx])));
+        trShareVals.push(trShareIdx >= 0 ? parseMoneyLike(mustString(r[trShareIdx])) : null);
+        scanBackVals.push(scanBackIdx >= 0 ? parseMoneyLike(mustString(r[scanBackIdx])) : null);
+        trNetRevenues.push(trNetRevenueIdx >= 0 ? parseMoneyLike(mustString(r[trNetRevenueIdx])) : null);
+        budgetRowJsons.push(Object.fromEntries(header.map((h, j) => [h, r[j] ?? null])));
+      }
+
+      // Batch upsert accounts
+      for (const acct of Array.from(seenAccounts)) {
+        await upsertAccount(pool, acct);
+      }
+
+      // Batch insert budget rows
+      if (budgetIds.length) {
         await pool.query(
           `
             INSERT INTO budget_raw (
               id, batch_id, call_point, ppg_item, weeks_text,
               weekly_volume_per_store, total_cases_budgeted, tr_share_of_discount,
               scan_back_per_case, tr_net_revenue, row_json
-            ) VALUES (
-              $1,$2,$3,$4,$5,
-              $6,$7,$8,
-              $9,$10,$11
+            )
+            SELECT * FROM UNNEST(
+              $1::uuid[], $2::uuid[], $3::text[], $4::text[], $5::text[],
+              $6::numeric[], $7::numeric[], $8::numeric[],
+              $9::numeric[], $10::numeric[], $11::jsonb[]
             )
           `,
           [
-            crypto.randomUUID(),
-            batchId,
-            callPoint,
-            ppgItem,
-            weeksIdx >= 0 ? mustString(r[weeksIdx]) : null,
-            weeklyVolIdx >= 0 ? parseNumberLike(mustString(r[weeklyVolIdx])) : null,
-            parseNumberLike(mustString(r[totalCasesIdx])),
-            trShareIdx >= 0 ? parseMoneyLike(mustString(r[trShareIdx])) : null,
-            scanBackIdx >= 0 ? parseMoneyLike(mustString(r[scanBackIdx])) : null,
-            trNetRevenueIdx >= 0 ? parseMoneyLike(mustString(r[trNetRevenueIdx])) : null,
-            Object.fromEntries(header.map((h, j) => [h, r[j] ?? null])),
+            budgetIds, budgetBatchIds, budgetCallPoints, ppgItems, weeksTexts,
+            weeklyVols, totalCases, trShareVals,
+            scanBackVals, trNetRevenues, budgetRowJsons,
           ]
         );
       }
