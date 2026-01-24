@@ -21,8 +21,7 @@ import {
   getFiscalPeriodsForYear,
   sum,
 } from "@/lib/tpm/fiscal";
-import { PromoType, Publix2026Mock, createPublix2026Mock } from "@/lib/tpm/mockPublix2026";
-import { demoScaleFactor, scalePublixMockForDemo } from "@/lib/tpm/demo-scale";
+import { PromoType, Publix2026Mock } from "@/lib/tpm/mockPublix2026";
 
 type CellStyle = "currency" | "number" | "percent";
 
@@ -60,14 +59,31 @@ function clamp12(values: number[]) {
   return Array.from({ length: 12 }, (_, i) => values[i] ?? 0);
 }
 
-function usePublixMock(filters: { retailer: string; division: string; year: number; demoKey: string }) {
-  // For this initial build, we only generate realistic mock data for Publix 2026.
-  // Other filters can be extended later.
+function zeros12() {
+  return Array.from({ length: 12 }, () => 0);
+}
+
+function useZeroMock(filters: { retailer: string; division: string; year: number; demoKey: string }) {
   return React.useMemo<Publix2026Mock>(() => {
-    const base = createPublix2026Mock();
-    const scaled = scalePublixMockForDemo({ ...base, division: filters.division }, demoScaleFactor(filters.demoKey));
-    return scaled;
-  }, [filters.division, filters.demoKey]);
+    const z = zeros12();
+    return {
+      retailer: "Publix",
+      year: 2026,
+      division: filters.division || "",
+      volume: {
+        actual: z,
+        budget: z,
+        lastYear: z,
+        forecastPromo: {
+          Frontline: z,
+          "10/$10": z,
+          B2G1: z,
+        },
+      },
+      spend: { actual: z, budget: z },
+      sales: { actual: z, budget: z },
+    };
+  }, [filters.division]);
 }
 
 export function TpmGrid({
@@ -79,7 +95,7 @@ export function TpmGrid({
   forecastPromo: Record<PromoType, number[]>;
   setForecastPromo: React.Dispatch<React.SetStateAction<Record<PromoType, number[]>>>;
 }) {
-  const mock = usePublixMock(filters);
+  const mock = useZeroMock(filters);
 
   // Derived series
   const forecastTotalVolume = React.useMemo(() => {

@@ -10,21 +10,6 @@ export type Filters = {
   year: number;
 };
 
-const fallbackRetailerDivisions = [
-  "Publix — Atlanta Division",
-  "Publix — Florida Division",
-  "Kroger — Cincinnati Division",
-  "Kroger — Atlanta Division",
-];
-
-const fallbackPpgs = [
-  "Talking Rain Company Total",
-  "Sparkling Ice Core SS 17oz Bottles",
-  "Sparkling Ice Branded 12 Packs",
-];
-
-const years = [2025, 2026, 2027, 2028];
-
 export function FiltersBar({
   value,
   onChange,
@@ -40,9 +25,14 @@ export function FiltersBar({
   requirePpg?: boolean;
   excludePpgs?: string[];
 }) {
-  const [opts, setOpts] = React.useState<{ retailerDivisions: string[]; ppgs: string[] }>({
-    retailerDivisions: fallbackRetailerDivisions,
-    ppgs: fallbackPpgs,
+  const [opts, setOpts] = React.useState<{
+    retailerDivisions: string[];
+    ppgs: string[];
+    years: number[];
+  }>({
+    retailerDivisions: [],
+    ppgs: [],
+    years: [],
   });
 
   React.useEffect(() => {
@@ -57,14 +47,12 @@ export function FiltersBar({
         const json = await res.json();
         if (!res.ok || !json.ok) return;
         if (cancelled) return;
-        const rd = (json.retailerDivisions || []).filter(Boolean);
-        const ppgs = (json.ppgs || []).filter(Boolean);
-        setOpts({
-          retailerDivisions: rd.length ? rd : fallbackRetailerDivisions,
-          ppgs: ppgs.length ? ppgs : fallbackPpgs,
-        });
+        const rd = (json.retailerDivisions || []).filter(Boolean).sort((a: string, b: string) => a.localeCompare(b));
+        const ppgs = (json.ppgs || []).filter(Boolean).sort((a: string, b: string) => a.localeCompare(b));
+        const years = (json.years || []).filter(Boolean).sort((a: number, b: number) => a - b);
+        setOpts({ retailerDivisions: rd, ppgs, years });
       } catch {
-        // ignore; fall back to defaults
+        // ignore; keep empty (no dummy options)
       }
     }
     load();
@@ -73,13 +61,32 @@ export function FiltersBar({
     };
   }, [token, value.year]);
 
+  // If selection is empty/invalid, choose the first available option (data-driven).
+  React.useEffect(() => {
+    if (!opts.retailerDivisions.length) return;
+    if (!value.retailerDivision || !opts.retailerDivisions.includes(value.retailerDivision)) {
+      onChange({ ...value, retailerDivision: opts.retailerDivisions[0] });
+    }
+  }, [opts.retailerDivisions, value, onChange]);
+
+  React.useEffect(() => {
+    if (!opts.years.length) return;
+    if (!Number.isFinite(value.year) || !opts.years.includes(value.year)) {
+      onChange({ ...value, year: opts.years[0] });
+    }
+  }, [opts.years, value, onChange]);
+
   // Ensure required PPG is set to something valid.
   React.useEffect(() => {
     if (!requirePpg) return;
     const filtered = opts.ppgs.filter((p) => !excludePpgs.includes(p));
     const valid = filtered.includes(value.ppg);
     if (!value.ppg || !valid || value.ppg === "__ALL__") {
-      onChange({ ...value, ppg: filtered[0] ?? "" });
+      const nextPpg = filtered[0] ?? "";
+      // Avoid infinite loops: only update when value actually changes.
+      if (nextPpg !== value.ppg) {
+        onChange({ ...value, ppg: nextPpg });
+      }
     }
   }, [requirePpg, opts.ppgs, excludePpgs, value, onChange]);
 
@@ -95,16 +102,21 @@ export function FiltersBar({
           <Select
             value={value.retailerDivision}
             onValueChange={(retailerDivision) => onChange({ ...value, retailerDivision })}
+            disabled={!token || opts.retailerDivisions.length === 0}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select retailer-division" />
+              <SelectValue placeholder={!token ? "Sign in to load" : "No data loaded"} />
             </SelectTrigger>
             <SelectContent>
-              {opts.retailerDivisions.map((rd) => (
-                <SelectItem key={rd} value={rd}>
-                  {rd}
-                </SelectItem>
-              ))}
+              {opts.retailerDivisions.length ? (
+                opts.retailerDivisions.map((rd) => (
+                  <SelectItem key={rd} value={rd}>
+                    {rd}
+                  </SelectItem>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-xs text-muted-foreground">No data loaded</div>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -118,19 +130,24 @@ export function FiltersBar({
           <Select
             value={value.ppg}
             onValueChange={(ppg) => onChange({ ...value, ppg })}
+            disabled={!token || ppgOptions.length === 0}
           >
             <SelectTrigger>
-              <SelectValue placeholder={requirePpg ? "Select PPG (required)" : "Select PPG"} />
+              <SelectValue placeholder={!token ? "Sign in to load" : "No data loaded"} />
             </SelectTrigger>
             <SelectContent>
               {allowAllPpg ? (
                 <SelectItem value="__ALL__">All PPGs</SelectItem>
               ) : null}
-              {ppgOptions.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
+              {ppgOptions.length ? (
+                ppgOptions.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-xs text-muted-foreground">No data loaded</div>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -144,16 +161,21 @@ export function FiltersBar({
           <Select
             value={String(value.year)}
             onValueChange={(y) => onChange({ ...value, year: Number(y) })}
+            disabled={!token || opts.years.length === 0}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Year" />
+              <SelectValue placeholder={!token ? "Sign in" : "No data"} />
             </SelectTrigger>
             <SelectContent>
-              {years.map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
+              {opts.years.length ? (
+                opts.years.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-xs text-muted-foreground">No data loaded</div>
+              )}
             </SelectContent>
           </Select>
         </div>

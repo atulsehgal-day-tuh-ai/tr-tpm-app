@@ -1,19 +1,21 @@
 "use client";
 
 import * as React from "react";
-
 import { Filters, FiltersBar } from "@/components/tpm/filters-bar";
 import { TpmGrid } from "@/components/tpm/tpm-grid";
 import { GridKpis } from "@/components/tpm/grid-kpis";
-import { PromoType, createPublix2026Mock } from "@/lib/tpm/mockPublix2026";
+import { PromoType, type Publix2026Mock } from "@/lib/tpm/mockPublix2026";
 import { Button } from "@/components/ui/button";
 import { useIdToken } from "@/components/auth/use-id-token";
 import { cn } from "@/lib/utils";
-import { demoScaleFactor, scalePublixMockForDemo } from "@/lib/tpm/demo-scale";
 
 function clamp12(values: number[]) {
   if (values.length === 12) return values;
   return Array.from({ length: 12 }, (_, i) => values[i] ?? 0);
+}
+
+function zeros12() {
+  return Array.from({ length: 12 }, () => 0);
 }
 
 function normalizeForecastPromo(fp: Record<PromoType, number[]>) {
@@ -59,12 +61,27 @@ export function TpmPlanner() {
   const parsed = React.useMemo(() => parseRetailerDivision(filters.retailerDivision), [filters.retailerDivision]);
   const demoKey = React.useMemo(() => `${filters.retailerDivision}||${filters.ppg}||${filters.year}`, [filters.retailerDivision, filters.ppg, filters.year]);
 
-  // MVP data source (mock) — will be replaced by DB-backed rollups later.
-  const mock = React.useMemo(() => {
-    const base = createPublix2026Mock();
-    const withDiv = { ...base, division: parsed.division || base.division };
-    return scalePublixMockForDemo(withDiv, demoScaleFactor(demoKey));
-  }, [parsed.division, demoKey]);
+  // Keep the exact grid structure/rows, but initialize with all-zero series.
+  const mock = React.useMemo<Publix2026Mock>(() => {
+    const z = zeros12();
+    return {
+      retailer: "Publix",
+      year: 2026,
+      division: parsed.division || "",
+      volume: {
+        actual: z,
+        budget: z,
+        lastYear: z,
+        forecastPromo: {
+          Frontline: z,
+          "10/$10": z,
+          B2G1: z,
+        },
+      },
+      spend: { actual: z, budget: z },
+      sales: { actual: z, budget: z },
+    };
+  }, [parsed.division]);
 
   const [forecastPromo, setForecastPromo] = React.useState<Record<PromoType, number[]>>(() => ({
     Frontline: clamp12(mock.volume.forecastPromo.Frontline),

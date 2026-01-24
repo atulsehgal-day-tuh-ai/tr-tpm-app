@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { FiltersBar, type Filters } from "@/components/tpm/filters-bar";
-import { createPublix2026Mock } from "@/lib/tpm/mockPublix2026";
 import { formatNumber, sum } from "@/lib/tpm/fiscal";
 import { useIdToken } from "@/components/auth/use-id-token";
 import Link from "next/link";
@@ -10,7 +9,7 @@ import { SegmentedControl } from "@/components/insights/segmented-control";
 import { BucketTrendLines } from "@/components/insights/bucket-trend-lines";
 import { buildMockInsightsSeries, type InsightsViewKey } from "@/lib/tpm/insights-series";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { demoScaleFactor } from "@/lib/tpm/demo-scale";
+import type { Publix2026Mock } from "@/lib/tpm/mockPublix2026";
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -80,8 +79,27 @@ export default function InsightsPage() {
   const [teamError, setTeamError] = React.useState<string | null>(null);
   const [scope, setScope] = React.useState<string>("me");
 
-  // MVP: use existing mock series (until DB-backed rollups land).
-  const mock = React.useMemo(() => createPublix2026Mock(), []);
+  // Keep Insights layout intact, but show all-zero metrics while we wire DB-backed rollups.
+  const mock = React.useMemo<Publix2026Mock>(() => {
+    const z = Array.from({ length: 12 }, () => 0);
+    return {
+      retailer: "Publix",
+      year: 2026,
+      division: "Atlanta Division",
+      volume: {
+        actual: z,
+        budget: z,
+        lastYear: z,
+        forecastPromo: {
+          Frontline: z,
+          "10/$10": z,
+          B2G1: z,
+        },
+      },
+      spend: { actual: z, budget: z },
+      sales: { actual: z, budget: z },
+    };
+  }, []);
   const series = React.useMemo(() => buildMockInsightsSeries({ mock, year: filters.year }), [mock, filters.year]);
   const scopeFactor = React.useMemo(() => {
     if (scope === "me") return 1;
@@ -95,14 +113,11 @@ export default function InsightsPage() {
     return 1;
   }, [scope, team]);
 
-  const filterFactor = React.useMemo(() => {
-    const ppgKey = filters.ppg === "__ALL__" ? "ALL" : filters.ppg;
-    return demoScaleFactor(`${filters.retailerDivision}||${ppgKey}||${filters.year}`);
-  }, [filters.retailerDivision, filters.ppg, filters.year]);
+  const filterFactor = 1;
 
   const scopedSeries = React.useMemo(
     () => scaleInsightsSeries(series, scopeFactor * filterFactor),
-    [series, scopeFactor, filterFactor]
+    [series, scopeFactor]
   );
 
   React.useEffect(() => {

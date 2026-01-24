@@ -48,10 +48,21 @@ export async function GET(req: NextRequest) {
     params
   );
 
+  const years = await pool.query(
+    `
+      SELECT EXTRACT(YEAR FROM week_end_date)::int AS year
+      FROM actuals_weekly_fact
+      GROUP BY 1
+      ORDER BY 1 ASC
+      LIMIT 50
+    `
+  );
+
   return NextResponse.json({
     ok: true,
     retailerDivisions: geos.rows.map((r) => r.geography).filter(Boolean),
     ppgs: prods.rows.map((r) => r.product).filter(Boolean),
+    years: years.rows.map((r) => r.year).filter(Boolean),
   });
 }
 
